@@ -1,17 +1,28 @@
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+class CustomUser(AbstractUser):
+    ROLES = [
+        ('student', 'Student'),
+        ('admin', 'Admin'),
+    ]
+    role = models.CharField(max_length=20, choices=ROLES, default='student')
+    institution_id = models.CharField(max_length=100, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.username} ({self.role})"
+
+    @property
+    def is_administrator(self):
+        return self.role == 'admin'
 
 class StudentProfile(models.Model):
     user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="student_profile"
+        CustomUser, on_delete=models.CASCADE, related_name="student_profile"
     )
     student_id = models.CharField(max_length=100, unique=True)
-    email = models.EmailField()
-
-    full_name = models.CharField(max_length=255)
-    first_name = models.CharField(max_length=100, null=True, blank=True)
-    last_name = models.CharField(max_length=100, null=True, blank=True)
 
     national_id = models.CharField(max_length=100, null=True, blank=True)
     nationality = models.CharField(max_length=100, null=True, blank=True)
@@ -35,4 +46,16 @@ class StudentProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.full_name} ({self.student_id})"
+        return f"{self.user.username} ({self.student_id})"
+
+
+class Administrator(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="administrator")
+    institution_name = models.CharField(max_length=255)
+    institution_code = models.CharField(max_length=100) # unique=True
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} ({self.institution_name})"
