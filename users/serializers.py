@@ -7,10 +7,12 @@ class CustomUserSerializer(serializers.ModelSerializer):
     fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'institution_id', 'created_at', 'updated_at'
     ]
     read_only_fields = ['id', 'created_at', 'updated_at']
+    extra_kwargs = {'password': {'required':False}}
 
 class StudentProfileSerializer(serializers.ModelSerializer):
   user = CustomUserSerializer(read_only=True)
-  user_id = serializers.PrimaryKeyRelatedField(queryset=CustomUser.objects.all(), source='user.id')
+  user_id = serializers.IntegerField(write_only=True, required=False)
+  email = serializers.EmailField(source='user.email', read_only=True)
 
   class Meta:
     model = StudentProfile
