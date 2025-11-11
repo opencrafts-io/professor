@@ -39,9 +39,10 @@ class Course(models.Model):
 
 
 class Grade(models.Model):
-    GRAGE_SCALE_CHOICES = [
+    GRADE_SCALE_CHOICES = [
         ("letter", "Letter"),
-        ("gpa_4", "gpa_5"),
+        ("gpa_4", "GPA 4.0"),
+        ("gpa_5", "GPA 5.0"),
         ("percentage", "Percentage"),
         ("pass_fail", "Pass/Fail"),
     ]
@@ -54,7 +55,7 @@ class Grade(models.Model):
     grade_points = models.FloatField(null=True, blank=True)
     credits = models.FloatField(null=True, blank=True)
     grade_scale = models.CharField(
-        max_length=20, choices=GRAGE_SCALE_CHOICES, null=True
+        max_length=20, choices=GRADE_SCALE_CHOICES, null=True
     )
 
     instructor = models.CharField(max_length=255, null=True, blank=True)
@@ -80,7 +81,7 @@ class ScheduleEntry(models.Model):
 
     course_code = models.CharField(max_length=50)
     course_name = models.CharField(max_length=255)
-    day_of_week = models.CharField(choices=DAY_CHOICES)
+    day_of_week = models.CharField(max_length=9, choices=DAY_CHOICES)
     start_time = models.TimeField()
     end_time = models.TimeField()
 
@@ -113,4 +114,4 @@ class Transcript(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.student.full_name} - {self.student.program} - {self.generated_date}"
+        return f"{self.student.user.username} - {self.student.program} - {self.generated_date}"

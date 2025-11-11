@@ -1,12 +1,13 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+
 class CustomUser(AbstractUser):
     ROLES = [
-        ('student', 'Student'),
-        ('admin', 'Admin'),
+        ("student", "Student"),
+        ("admin", "Admin"),
     ]
-    role = models.CharField(max_length=20, choices=ROLES, default='student')
+    role = models.CharField(max_length=20, choices=ROLES, default="student")
     institution_id = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -16,7 +17,8 @@ class CustomUser(AbstractUser):
 
     @property
     def is_administrator(self):
-        return self.role == 'admin'
+        return self.role == "admin"
+
 
 class StudentProfile(models.Model):
     user = models.OneToOneField(
@@ -50,9 +52,11 @@ class StudentProfile(models.Model):
 
 
 class Administrator(models.Model):
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name="administrator")
+    user = models.OneToOneField(
+        CustomUser, on_delete=models.CASCADE, related_name="administrator"
+    )
     institution_name = models.CharField(max_length=255)
-    institution_code = models.CharField(max_length=100) # unique=True
+    institution_code = models.CharField(max_length=100)  # unique=True
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

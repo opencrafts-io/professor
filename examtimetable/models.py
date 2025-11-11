@@ -5,12 +5,12 @@ from courses.models import SemesterInfo
 
 class ExamSchedule(models.Model):
     course_code = models.CharField(max_length=50)
-    course_code = models.CharField(max_length=255)
+    course_name = models.CharField(max_length=255)
     semester = models.ForeignKey(SemesterInfo, on_delete=models.CASCADE, related_name='exam_schedule')
 
     exam_date = models.DateField()
-    start_time = models.DateField()
-    end_time = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
 
     location = models.CharField(max_length=255, null=True, blank=True)
     room = models.CharField(max_length=100, null=True, blank=True)
