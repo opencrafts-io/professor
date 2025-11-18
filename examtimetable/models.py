@@ -17,7 +17,7 @@ class ExamSchedule(models.Model):
     venue = models.CharField(max_length=255, null=True, blank=True)
     campus = models.CharField(max_length=255, null=True, blank=True)
     coordinator = models.CharField(max_length=255, null=True, blank=True)
-    hrs = models.IntegerField(null=True, blank=True)
+    hrs = models.CharField(max_length=10, null=True, blank=True)
     invigilator = models.CharField(max_length=255, null=True, blank=True)
 
     location = models.CharField(max_length=255, null=True, blank=True)
