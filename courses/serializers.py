@@ -95,7 +95,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
   course_name = serializers.CharField(source='course.course_name', read_only=True)
   semester_code = serializers.CharField(source='semester.code', read_only=True)
   semester_name = serializers.CharField(source='semester.name', read_only=True)
-  
+
   student_profile_id = serializers.IntegerField(write_only=True, required=False)
   course_id = serializers.IntegerField(write_only=True, required=False)
   semester_id = serializers.IntegerField(write_only=True, required=False)
@@ -109,26 +109,26 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
     student_profile_id = validated_data.pop('student_profile_id', None)
     course_id = validated_data.pop('course_id', None)
     semester_id = validated_data.pop('semester_id', None)
-    
+
     if student_profile_id:
       validated_data['student'] = StudentProfile.objects.get(id=student_profile_id)
     if course_id:
       validated_data['course'] = Course.objects.get(id=course_id)
     if semester_id:
       validated_data['semester'] = SemesterInfo.objects.get(id=semester_id)
-    
+
     return super().create(validated_data)
 
   def update(self, instance, validated_data):
     student_profile_id = validated_data.pop('student_profile_id', None)
     course_id = validated_data.pop('course_id', None)
     semester_id = validated_data.pop('semester_id', None)
-    
+
     if student_profile_id:
       validated_data['student'] = StudentProfile.objects.get(id=student_profile_id)
     if course_id:
       validated_data['course'] = Course.objects.get(id=course_id)
     if semester_id:
       validated_data['semester'] = SemesterInfo.objects.get(id=semester_id)
-    
+
     return super().update(instance, validated_data)
