@@ -12,6 +12,14 @@ class ExamSchedule(models.Model):
     start_time = models.TimeField()
     end_time = models.TimeField()
 
+# Optional fields to support custom formats of timetables.
+    day = models.CharField(max_length=50, null=True, blank=True)
+    venue = models.CharField(max_length=255, null=True, blank=True)
+    campus = models.CharField(max_length=255, null=True, blank=True)
+    coordinator = models.CharField(max_length=255, null=True, blank=True)
+    hrs = models.IntegerField(null=True, blank=True)
+    invigilator = models.CharField(max_length=255, null=True, blank=True)
+
     location = models.CharField(max_length=255, null=True, blank=True)
     room = models.CharField(max_length=100, null=True, blank=True)
     building = models.CharField(max_length=255, null=True, blank=True)
