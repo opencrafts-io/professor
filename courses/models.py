@@ -115,3 +115,16 @@ class Transcript(models.Model):
 
     def __str__(self):
         return f"{self.student.user.username} - {self.student.program} - {self.generated_date}"
+
+class StudentCourseEnrollment(models.Model):
+    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='student_course_enrollments')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='student_course_enrollments')
+    semester = models.ForeignKey(SemesterInfo, on_delete=models.CASCADE, related_name='student_course_enrollments')
+    enrollment_status = models.CharField(max_length=50, default='enrolled', null=True, blank=True)
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['student', 'course', 'semester']
+
+    def __str__(self):
+        return f"{self.student.user.username} - {self.course.course_code} - {self.semester.code}"
