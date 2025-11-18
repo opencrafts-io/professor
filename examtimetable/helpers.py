@@ -1,6 +1,7 @@
 # contains helper functions
 from openpyxl import load_workbook
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 import re
 
 # parses nursing exam timetable
@@ -132,7 +133,7 @@ def parse_nursing_timetable(file_path):
                 continue
 
             # skipping unnecessary course values
-            if row_value is None or row_value.strip() in unnecessary_course_values:
+            if row_value is None or (isinstance(row_value, str) and row_value.strip() in unnecessary_course_values):
                 continue
 
             # getting the venue
@@ -144,13 +145,14 @@ def parse_nursing_timetable(file_path):
             start_time = time_dictionary[f"{idx}"][0]
 
             # setting course code
-            course_name = row_value.strip()
+            course_name = str(row_value).strip() if row_value is not None else ""
 
             # handling merged rows
             remaining_cells = rows[idx+1:]
-            last_none = 0
-            for rem_idx, rem in enumerate(remaining_cells, start=idx):
+            rem_idx = idx + 1
+            for rem_idx_iter, rem in enumerate(remaining_cells, start=idx+1):
                 if rem is not None:
+                    rem_idx = rem_idx_iter
                     break
 
             # concatenating start time and end time
@@ -211,8 +213,9 @@ def parse_school_exam_timetable(file):
 
         # values for the course code
         day = ""
-        time = ""
+        course_time = ""
         course_code = ""
+        hours = "2"
 
         # iterating through the columns data
         for column in data_columns:
@@ -222,27 +225,30 @@ def parse_school_exam_timetable(file):
                     continue
 
                 # checking if its date and day specification
-                if isinstance(value, datetime) or value.split(" ")[0] in days_of_the_week:
-                    day =  days_of_the_week[value.weekday()] + " " + \
-                        str(value.date()).replace("-", "/") if isinstance(value, datetime)\
-                         else value
+                if isinstance(value, datetime):
+                    day = days_of_the_week[value.weekday()] + " " + str(value.date()).replace("-", "/")
+                elif isinstance(value, str) and value.split(" ")[0] in days_of_the_week:
+                    day = value
 
                 # checking if its time specification
-                elif value[0].isdigit():
+                elif isinstance(value, str) and len(value) > 0 and value[0].isdigit():
                     course_time = value.strip()
                     start_time = course_time.split("-")[0]
                     end_time = course_time.split("-")[1]
                     hours = time_difference(start_time, end_time)
-                else:
+                elif isinstance(value, str):
                     course_code = value
+                    hours_str = "2"  # default
+                    if hours and len(hours) > 0:
+                        hours_str = "2" if hours[0] == "-" else hours[0]
                     courses.append(
                         {
                             "course_code": course_code,
                             "day": day,
                             "time": course_time,
-                            "venue": rooms[f'{idx}'],
+                            "venue": rooms.get(f'{idx}', ""),
                             # handles errors recorded in exam timetable defaults to 2
-                            "hrs": "2" if hours[0] == "-" else hours[0],
+                            "hrs": hours_str,
                         }
                     )
     return courses
@@ -428,6 +434,7 @@ def kca_extractor(file):
 
     # Find header row
     header_row = None
+    header_idx = 0
     for row_idx, row in enumerate(sheet.iter_rows(values_only=True) if sheet else [], start=1):
         if any('UNIT CODE' in str(cell).upper() for cell in row if cell):
             header_row = list(map(str, row))
@@ -459,8 +466,8 @@ def kca_extractor(file):
         "REMARKS": "REMARKS",
     }
 
-    courses = []
-    current_entry = None
+    courses: List[Dict[str, Any]] = []
+    current_entry: Optional[Dict[str, Any]] = None
 
     for row_idx, row in enumerate(sheet.iter_rows(min_row=header_idx + 1, values_only=True) if sheet else [], start=header_idx + 1):
         row = list(map(lambda x: x if x is not None else "", row))
@@ -489,7 +496,11 @@ def kca_extractor(file):
                         break
                 if out_key.lower() not in current_entry:
                     current_entry[out_key.lower()] = ""
-            current_entry["program"] = [current_entry["program"]] if current_entry["program"] else []
+            program_val = current_entry.get("program", "")
+            if isinstance(program_val, str):
+                current_entry["program"] = [program_val] if program_val else []
+            else:
+                current_entry["program"] = program_val if isinstance(program_val, list) else []
             current_entry["venue"] = current_entry.pop("room", "")
 
             # Handle formula in session
@@ -502,9 +513,13 @@ def kca_extractor(file):
                     if pattern in norm_headers:
                         val = str(row[norm_headers[pattern]]).strip()
                         if val and out_key.lower() in ["program", "venue", "principal_invigilator", "support_invigilator"]:
-                            if not isinstance(current_entry[out_key.lower()], list):
-                                current_entry[out_key.lower()] = [current_entry[out_key.lower()]]
-                            current_entry[out_key.lower()].append(val)
+                            existing_val = current_entry.get(out_key.lower(), "")
+                            if isinstance(existing_val, str):
+                                current_entry[out_key.lower()] = [existing_val] if existing_val else []
+                            elif not isinstance(existing_val, list):
+                                current_entry[out_key.lower()] = []
+                            if isinstance(current_entry[out_key.lower()], list):
+                                current_entry[out_key.lower()].append(val)
                         break
 
     if current_entry:
