@@ -215,3 +215,12 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 *.txt
+
+
+# folder which timetables are uploaded for tests
+uploads/
+
+# ignore the .json files from the tests running
+*.json
+
+evaluate*.py

@@ -261,30 +261,75 @@ def strath_extractor(file):
     def format_strath_time(time):
         """
         converts format (8:00-10:00) to (8:00AM-10:00AM)
+        Handles edge cases like "11:00AM-14.00"
         """
         if not time or "-" not in time:
             return time
 
-        start_time, end_time = time.split("-", 1)
+        original_time = str(time).strip()
+        clean_time = original_time.upper()
+        clean_time = re.sub(r'\s*-\s*', '-', clean_time)
+
+        start_time, end_time = clean_time.split("-", 1)
         start_time = start_time.strip()
         end_time = end_time.strip()
 
-        def convert_to_12hour(time_24):
-            if ":" in time_24:
-                hour, minute = time_24.split(":")
-                hour = int(hour)
-                if hour == 0:
-                    return f"12:{minute}AM"
-                elif hour < 12:
-                    return f"{hour}:{minute}AM"
-                elif hour == 12:
-                    return f"12:{minute}PM"
-                else:
-                    return f"{hour-12}:{minute}PM"
-            return time_24
+        def convert_to_12hour(time_24, ampm_hint=None):
+            """Convert 24-hour time to 12-hour format"""
+            if not time_24:
+                return time_24
 
-        formatted_start_time = convert_to_12hour(start_time)
-        formatted_end_time = convert_to_12hour(end_time)
+            ampm = ampm_hint
+            time_str = time_24
+
+            ampm_match = re.search(r'([AP]M)', time_str)
+            if ampm_match:
+                ampm = ampm_match.group(1)
+                time_str = re.sub(r'[AP]M', '', time_str).strip()
+
+            if ":" in time_str:
+                hour, minute = time_str.split(":")
+                hour = int(hour)
+                minute = int(minute)
+            elif "." in time_str:
+                hour, minute = time_str.split(".")
+                hour = int(hour)
+                minute = int(minute)
+            elif len(time_str) == 4 and time_str.isdigit():
+                hour = int(time_str[:2])
+                minute = int(time_str[2:])
+            else:
+                try:
+                    hour = int(time_str)
+                    minute = 0
+                except ValueError:
+                    return time_24
+
+            if not ampm:
+                if hour >= 12:
+                    ampm = 'PM'
+                    if hour > 12:
+                        hour = hour - 12
+                else:
+                    ampm = 'AM'
+                    if hour == 0:
+                        hour = 12
+
+            return f"{hour}:{minute:02d}{ampm}"
+
+        start_ampm = None
+        end_ampm = None
+
+        start_ampm_match = re.search(r'([AP]M)', start_time)
+        if start_ampm_match:
+            start_ampm = start_ampm_match.group(1)
+
+        end_ampm_match = re.search(r'([AP]M)', end_time)
+        if end_ampm_match:
+            end_ampm = end_ampm_match.group(1)
+
+        formatted_start_time = convert_to_12hour(start_time, start_ampm)
+        formatted_end_time = convert_to_12hour(end_time, end_ampm or start_ampm)
 
         return f"{formatted_start_time}-{formatted_end_time}"
 
@@ -366,44 +411,93 @@ def kca_extractor(file):
     def format_time(time_str):
         """
         Standardizes various time formats to (8:00AM-10:00AM)
+        Handles: "8:00AM-10:00AM", "0800-1000 HRS", "2.30 pm - 4.30pm", "11:00AM-14.00"
         """
         if not time_str:
             return ""
 
-        # Normalize: remove "HR"/"HRS", handle dots/spaces/AM/PM
-        clean_time = re.sub(r'(HR|HRS)', '', time_str.upper()).strip()
+        original_time = str(time_str).strip()
+        clean_time = original_time.upper()
+
+        clean_time = re.sub(r'(HR|HRS)', '', clean_time).strip()
         clean_time = re.sub(r'\s*-\s*', '-', clean_time)
+        clean_time = re.sub(r'\s+', ' ', clean_time)
 
-        # Match patterns like "8.30am-10.30am", "0800-1000", "8am-10am", "5pm-7pm"
-        match = re.match(r'(\d{1,2}(?:\.\d{2})?)([AP]M)?-(\d{1,2}(?:\.\d{2})?)([AP]M)?', clean_time)
-        if not match:
-            return time_str
-
-        start_hour, start_ampm, end_hour, end_ampm = match.groups()
-        start_hour = start_hour.replace('.', ':')
-        end_hour = end_hour.replace('.', ':')
-
-        # Ensure minutes if missing
-        if ':' not in start_hour:
-            start_hour += ':00'
-        if ':' not in end_hour:
-            end_hour += ':00'
-
-        # Handle AM/PM or infer from 24h format
         def to_12hour(hour_min, ampm=None):
-            hour, minute = map(int, hour_min.split(':'))
-            if ampm is None:
-                if hour >= 12:
-                    ampm = 'PM'
-                    hour = hour - 12 if hour > 12 else hour
+            """Convert hour:minute to 12-hour format"""
+            try:
+                if ':' in hour_min:
+                    hour, minute = map(int, hour_min.split(':'))
                 else:
-                    ampm = 'AM'
-            return f"{hour}:{minute:02d}{ampm}"
+                    hour = int(hour_min)
+                    minute = 0
 
-        formatted_start = to_12hour(start_hour, start_ampm)
-        formatted_end = to_12hour(end_hour, end_ampm or start_ampm)
+                if ampm is None:
+                    if hour >= 12:
+                        ampm = 'PM'
+                        if hour > 12:
+                            hour = hour - 12
+                        elif hour == 12:
+                            pass
+                    else:
+                        ampm = 'AM'
+                        if hour == 0:
+                            hour = 12
 
-        return f"{formatted_start}-{formatted_end}"
+                return f"{hour}:{minute:02d}{ampm}"
+            except (ValueError, AttributeError):
+                return hour_min
+
+        start_time_str = None
+        end_time_str = None
+        start_ampm = None
+        end_ampm = None
+
+        if '-' in clean_time:
+            parts = clean_time.split('-', 1)
+            start_part = parts[0].strip()
+            end_part = parts[1].strip()
+
+            start_ampm_match = re.search(r'([AP]M)', start_part)
+            if start_ampm_match:
+                start_ampm = start_ampm_match.group(1)
+                start_part = re.sub(r'[AP]M', '', start_part).strip()
+
+            end_ampm_match = re.search(r'([AP]M)', end_part)
+            if end_ampm_match:
+                end_ampm = end_ampm_match.group(1)
+                end_part = re.sub(r'[AP]M', '', end_part).strip()
+
+            start_time_str = start_part
+            end_time_str = end_part
+
+            if not start_time_str or not end_time_str:
+                return original_time
+
+            start_time_str = start_time_str.replace('.', ':')
+            end_time_str = end_time_str.replace('.', ':')
+
+            if ':' not in start_time_str and len(start_time_str) == 4 and start_time_str.isdigit():
+                start_time_str = f"{start_time_str[:2]}:{start_time_str[2:]}"
+            elif ':' not in start_time_str:
+                start_time_str = f"{start_time_str}:00"
+
+            if ':' not in end_time_str:
+                if len(end_time_str) == 4 and end_time_str.isdigit():
+                    end_time_str = f"{end_time_str[:2]}:{end_time_str[2:]}"
+                elif '.' in end_time_str or end_time_str.replace('.', '').isdigit():
+                    end_time_str = end_time_str.replace('.', ':')
+                    if ':' not in end_time_str:
+                        end_time_str = f"{end_time_str}:00"
+                else:
+                    end_time_str = f"{end_time_str}:00"
+
+            formatted_start = to_12hour(start_time_str, start_ampm)
+            formatted_end = to_12hour(end_time_str, end_ampm or start_ampm)
+
+            return f"{formatted_start}-{formatted_end}"
+
+        return original_time
 
     def convert_date(date_val):
         """Convert Excel serial or string to readable date
