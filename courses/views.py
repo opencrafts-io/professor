@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
 from .models import Course, StudentCourseEnrollment, SemesterInfo
-from .serializers import CourseSerializer, StudentCourseEnrollmentSerializer
+from .serializers import CourseSerializer, StudentCourseEnrollmentSerializer, SemesterInfoSerializer
 from users.models import StudentProfile
 from professor.pagination import ResultsSetPagination
 
@@ -63,4 +63,30 @@ class CourseDetailView(RetrieveAPIView):
     """
     serializer_class = CourseSerializer
     queryset = Course.objects.all()
+    lookup_field = 'id'
+
+
+class SemesterListView(ListAPIView):
+    """
+    List all semesters (paginated).
+    """
+    serializer_class = SemesterInfoSerializer
+    queryset = SemesterInfo.objects.all()
+    pagination_class = ResultsSetPagination
+
+
+class SemesterCreateView(CreateAPIView):
+    """
+    Create a new semester.
+    """
+    serializer_class = SemesterInfoSerializer
+    queryset = SemesterInfo.objects.all()
+
+
+class SemesterDetailView(RetrieveAPIView):
+    """
+    Retrieve a specific semester by ID.
+    """
+    serializer_class = SemesterInfoSerializer
+    queryset = SemesterInfo.objects.all()
     lookup_field = 'id'
