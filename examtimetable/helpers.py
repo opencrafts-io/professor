@@ -175,11 +175,31 @@ def parse_school_exam_timetable(file):
         Returns the difference in hrs between two
         time intervals
         """
+        start_time = start_time.strip()
+        end_time = end_time.strip()
 
-        format = '%I:%M%p'
-        start_time = datetime.strptime(start_time, format)
-        end_time = datetime.strptime(end_time, format)
-        hrs = (end_time - start_time).total_seconds() / 3600
+        formats = ["%I:%M%p", "%H:%M", "%I:%M %p", "%H:%M "]
+        start_dt = None
+        end_dt = None
+
+        for fmt in formats:
+            try:
+                start_dt = datetime.strptime(start_time, fmt)
+                break
+            except ValueError:
+                continue
+
+        for fmt in formats:
+            try:
+                end_dt = datetime.strptime(end_time, fmt)
+                break
+            except ValueError:
+                continue
+
+        if start_dt is None or end_dt is None:
+            return "2"
+
+        hrs = (end_dt - start_dt).total_seconds() / 3600
         return str(hrs)
 
     # loading the workbook

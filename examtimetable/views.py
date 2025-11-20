@@ -144,8 +144,26 @@ class ParseExamTimetableView(APIView):
                     if '-' in time_str:
                         try:
                             start_str, end_str = time_str.split('-', 1)
-                            start_time = datetime.strptime(start_str.strip(), "%I:%M%p").time()
-                            end_time = datetime.strptime(end_str.strip(), "%I:%M%p").time()
+                            start_str = start_str.strip()
+                            end_str = end_str.strip()
+                            
+                            formats = ["%I:%M%p", "%H:%M", "%I:%M %p", "%H:%M "]
+                            start_time = None
+                            end_time = None
+                            
+                            for fmt in formats:
+                                try:
+                                    start_time = datetime.strptime(start_str, fmt).time()
+                                    break
+                                except ValueError:
+                                    continue
+                            
+                            for fmt in formats:
+                                try:
+                                    end_time = datetime.strptime(end_str, fmt).time()
+                                    break
+                                except ValueError:
+                                    continue
                         except (ValueError, IndexError):
                             pass
                 
