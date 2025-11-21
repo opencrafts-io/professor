@@ -109,7 +109,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
   class Meta:
     model = StudentCourseEnrollment
     fields = '__all__'
-    read_only_fields = ['enrolled_at']
+    read_only_fields = ['enrolled_at', 'student', 'course', 'semester']
 
   def create(self, validated_data):
     student_profile_id = validated_data.pop('student_profile_id', None)
