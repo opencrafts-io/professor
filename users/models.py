@@ -1,28 +1,41 @@
-from django.contrib.auth.models import AbstractUser
+import uuid
 from django.db import models
 
 
-class CustomUser(AbstractUser):
-    ROLES = [
-        ("student", "Student"),
-        ("admin", "Admin"),
-    ]
-    role = models.CharField(max_length=20, choices=ROLES, default="student")
-    institution_id = models.CharField(max_length=100, null=True, blank=True)
+class User(models.Model):
+    user_id = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        primary_key=True,
+    )
+    name = models.CharField(max_length=512)
+    email = models.EmailField(max_length=255, null=True, blank=True)
+    phone = models.CharField(max_length=20, null=True, blank=True)
+    username = models.CharField(max_length=100, null=True, blank=True)
+    avatar_url = models.URLField(max_length=500, null=True, blank=True)
+    vibe_points = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        return f"{self.username} ({self.role})"
+    class Meta:
+        indexes = [
+            models.Index(fields=["email"]),
+            models.Index(fields=["username"]),
+        ]
 
-    @property
-    def is_administrator(self):
-        return self.role == "admin"
+    def __str__(self):
+        """
+        Provide a concise display string identifying the user by username and name.
+
+        Returns:
+            str: A string formatted as "@{username} - ({name})".
+        """
+        return f"@{self.username} - ({self.name})"
 
 
 class StudentProfile(models.Model):
     user = models.OneToOneField(
-        CustomUser, on_delete=models.CASCADE, related_name="student_profile"
+        User, on_delete=models.CASCADE, related_name="student_profile"
     )
     student_id = models.CharField(max_length=100, unique=True)
 
@@ -53,7 +66,7 @@ class StudentProfile(models.Model):
 
 class Administrator(models.Model):
     user = models.OneToOneField(
-        CustomUser, on_delete=models.CASCADE, related_name="administrator"
+        User, on_delete=models.CASCADE, related_name="administrator"
     )
     institution_name = models.CharField(max_length=255)
     institution_code = models.CharField(max_length=100)  # unique=True
