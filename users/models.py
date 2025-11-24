@@ -76,3 +76,31 @@ class Administrator(models.Model):
 
     def __str__(self):
         return f"{self.user.username} ({self.institution_name})"
+
+
+class Credentials(models.Model):
+    """
+    Stores a user's institutional login credentials.
+    """
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="credentials"
+    )
+    username = models.CharField(max_length=255, unique=True)
+    password = models.CharField(max_length=255)
+
+    additional_fields = models.JSONField(default=dict, blank=True)
+
+    mfa_code = models.CharField(max_length=10, null=True, blank=True)
+
+    mfa_method = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+    )
+
+    oauth_token = models.TextField(null=True, blank=True)
+    oauth_state = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return self.username
