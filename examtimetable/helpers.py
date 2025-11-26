@@ -253,9 +253,12 @@ def parse_school_exam_timetable(file):
                 # checking if its time specification
                 elif isinstance(value, str) and len(value) > 0 and value[0].isdigit():
                     course_time = value.strip()
-                    start_time = course_time.split("-")[0]
-                    end_time = course_time.split("-")[1]
-                    hours = time_difference(start_time, end_time)
+                    if "-" in course_time:
+                        start_time = course_time.split("-")[0]
+                        end_time = course_time.split("-")[1]
+                        hours = time_difference(start_time, end_time)
+                    else:
+                        hours = "2"
                 elif isinstance(value, str):
                     course_code = value
                     hours_str = "2"  # default

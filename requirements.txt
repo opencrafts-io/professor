@@ -1,9 +1,13 @@
 asgiref==3.10.0
-Django==5.2.7
+django==5.2.7
 django-stubs==5.2.7
 django-stubs-ext==5.2.7
 djangorestframework==3.16.1
+et-xmlfile==2.0.0
 openpyxl==3.1.2
+pip==24.0
 sqlparse==0.5.3
-types-PyYAML==6.0.12.20250915
-typing_extensions==4.15.0
+types-pyyaml==6.0.12.20250915
+typing-extensions==4.15.0
+uv==0.9.8
+xlrd==2.0.2
