@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -38,18 +39,72 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'event_bus',
     'courses',
     'examtimetable',
     'users',
 ]
 
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": True,
+    "formatters": {
+        "standard": {"format": "%(asctime)s [%(levelname)s]- %(message)s"},
+        "json": {
+            "()": "professor.log_formatter.StandardJSONLogFormatter",
+        },
+    },
+    "handlers": {
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": [],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "professor": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
+# Rabbit mq setup
+RABBITMQ_USER = os.getenv("RABBITMQ_USER", None)
+RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", None)
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", None)
+RABBITMQ_PORT = os.getenv("RABBITMQ_PORT", None)
+RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", None)
+
 REST_FRAMEWORK = {
+    "DEFAULT_PERMISSION_CLASSES": [],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "professor.verisafe_jwt_authentication.VerisafeJWTAuthentication",
+    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 30,
 }
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    "professor.middlewares.request_logging_middleware.RequestLoggingMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -130,4 +185,4 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-AUTH_USER_MODEL = 'users.CustomUser'
+# AUTH_USER_MODEL = 'users.CustomUser'
