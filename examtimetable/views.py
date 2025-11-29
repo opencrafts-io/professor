@@ -277,3 +277,28 @@ class ExamScheduleByCourseCodesView(APIView):
         exams = ExamSchedule.objects.filter(course_code__in=course_codes)
         serializer = ExamScheduleSerializer(exams, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ExamScheduleByInstitutionView(APIView):
+    """
+    Get exam schedules for a specific institution.
+    Query params: institution_id (required), semester_id (optional)
+    """
+
+    def get(self, request):
+        institution_id = request.query_params.get('institution_id')
+        semester_id = request.query_params.get('semester_id')
+
+        if not institution_id:
+            return Response(
+                {"error": "institution_id query parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        exams = ExamSchedule.objects.filter(institution_id=institution_id)
+
+        if semester_id:
+            exams = exams.filter(semester_id=semester_id)
+
+        serializer = ExamScheduleSerializer(exams, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
