@@ -428,7 +428,7 @@ def strath_extractor(file):
 def kca_extractor(file):
     """
     Extracts TT data for KCA University
-    Resulted to using simple regex to handle the different formats in different timetables.
+    Returns standardized format: course_code, day, time, venue
     """
 
     def format_time(time_str):
@@ -533,19 +533,6 @@ def kca_extractor(file):
                 return str(date_val)
         return str(date_val).strip()
 
-    def compute_session_from_time(formatted_time):
-        """Map formatted time to session number"""
-        if formatted_time == "8:00AM-10:00AM":
-            return "1"
-        elif formatted_time == "11:00AM-1:00PM":
-            return "2"
-        elif formatted_time == "2:00PM-4:00PM":
-            return "3"
-        elif formatted_time == "5:00PM-7:00PM":
-            return "4"
-        else:
-            return ""
-
     wb_obj = load_workbook(file, data_only=True)
     sheet = wb_obj.active
 
@@ -563,24 +550,12 @@ def kca_extractor(file):
     # Normalize headers
     norm_headers = {h.upper().strip().replace(' ', '_'): idx for idx, h in enumerate(header_row) if h}
 
+    # Only map the 4 required fields
     key_map = {
-        "SESSION": "SESSION",
         "DATE": "DATE",
         "TIME": "TIME",
         "ROOM": "ROOM|VENUE",
         "UNIT_CODE": "UNIT_CODE|UNIT CODE",
-        "UNIT_NAME": "UNIT_NAME|UNIT NAME",
-        "PRINCIPAL_INVIGILATOR": "PRINCIPAL_INVIGILATORS|PRINCIPAL INVIGILATORS - MAIN|PRINCIPAL INVIGILATORS (MAIN)|INVIGILATOR OF THE SESSION",
-        "SUPPORT_INVIGILATOR": "SUPPORT_INVIGILATORS|ADDITIONAL_INVIGILATORS_MAIN|OTHER INVIGILATORS (MAIN)",
-        "STUDENT_COUNT": "COUNTER|COUNT",
-        "PROGRAM": "PROGRAM_NAME|PROG",
-        "MODE_OF_STUDY": "MODE_OF_STUDY",
-        "SCHOOL": "SCHOOL",
-        "DEPARTMENT": "DEPARTMENT|DEPARMENT",
-        "TRIMESTER": "TRIMESTER",
-        "CAMPUS": "CAMPUS",
-        "SESSION_LEADER": "SESSION_LEADER",
-        "REMARKS": "REMARKS",
     }
 
     courses: List[Dict[str, Any]] = []
@@ -598,53 +573,29 @@ def kca_extractor(file):
         if unit_code:
             if current_entry:
                 courses.append(current_entry)
-            current_entry = {"course_code": unit_code}
-            raw_time = ""
+
+            current_entry = {
+                "course_code": unit_code,
+                "day": "",
+                "time": "",
+                "venue": ""
+            }
+
             for out_key, patterns in key_map.items():
                 for pattern in patterns.split('|'):
                     if pattern in norm_headers:
                         val = row[norm_headers[pattern]]
                         if out_key == "DATE":
                             val = convert_date(val)
+                            current_entry["day"] = str(val).strip()
                         elif out_key == "TIME":
                             raw_time = str(val)
-                            val = format_time(raw_time)
-                        current_entry[out_key.lower()] = str(val).strip()
-                        break
-                if out_key.lower() not in current_entry:
-                    current_entry[out_key.lower()] = ""
-            program_val = current_entry.get("program", "")
-            if isinstance(program_val, str):
-                current_entry["program"] = [program_val] if program_val else []
-            else:
-                current_entry["program"] = program_val if isinstance(program_val, list) else []
-            current_entry["venue"] = current_entry.pop("room", "")
-
-            # Handle formula in session
-            if current_entry["session"].startswith('=IF'):
-                current_entry["session"] = compute_session_from_time(current_entry["time"])
-
-        elif current_entry:
-            for out_key, patterns in key_map.items():
-                for pattern in patterns.split('|'):
-                    if pattern in norm_headers:
-                        val = str(row[norm_headers[pattern]]).strip()
-                        if val and out_key.lower() in ["program", "venue", "principal_invigilator", "support_invigilator"]:
-                            existing_val = current_entry.get(out_key.lower(), "")
-                            if isinstance(existing_val, str):
-                                current_entry[out_key.lower()] = [existing_val] if existing_val else []
-                            elif not isinstance(existing_val, list):
-                                current_entry[out_key.lower()] = []
-                            if isinstance(current_entry[out_key.lower()], list):
-                                current_entry[out_key.lower()].append(val)
+                            current_entry["time"] = format_time(raw_time)
+                        elif out_key == "ROOM":
+                            current_entry["venue"] = str(val).strip()
                         break
 
     if current_entry:
         courses.append(current_entry)
-
-    for course in courses:
-        for key in ["program", "venue", "principal_invigilator", "support_invigilator"]:
-            if isinstance(course[key], list):
-                course[key] = ", ".join(set(filter(None, course[key])))  # Unique non-empty
 
     return courses

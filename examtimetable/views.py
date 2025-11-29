@@ -74,6 +74,7 @@ class ParseExamTimetableView(APIView):
         file = request.FILES.get('file')
         file_name = request.data.get('file_name')
         semester_id = request.data.get('semester_id')
+        institution_id = request.data.get('institution_id')
 
         if not file:
             return Response(
@@ -200,13 +201,21 @@ class ParseExamTimetableView(APIView):
 
                 if semester:
                     exam_data['semester_id'] = semester.pk
+                if institution_id:
+                    exam_data['institution_id'] = institution_id
 
                 serializer = ExamScheduleSerializer(data=exam_data)
                 if serializer.is_valid():
+                    lookup = {
+                        'course_code': course_code,
+                        'semester': semester if semester else None,
+                    }
+                    if institution_id:
+                        lookup['institution_id'] = institution_id
+
                     exam_schedule, created = ExamSchedule.objects.update_or_create(
-                        course_code=course_code,
-                        semester=semester if semester else None,
-                        defaults=serializer.validated_data
+                        **lookup,
+                        defaults=serializer.validated_data,
                     )
                     if created:
                         created_count += 1
