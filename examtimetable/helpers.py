@@ -269,9 +269,11 @@ def parse_school_exam_timetable(file):
                             "course_code": course_code,
                             "day": day,
                             "time": course_time,
-                            "venue": rooms.get(f'{idx}', ""),
-                            # handles errors recorded in exam timetable defaults to 2
-                            "hrs": hours_str,
+                            "venue": rooms.get(f"{idx}", ""),
+                            "campus": "",
+                            "coordinator": "",
+                            "invigilator": "",
+                            "datetime_str": None,
                         }
                     )
     return courses
