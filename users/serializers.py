@@ -1,16 +1,23 @@
 from rest_framework import serializers
-from .models import CustomUser, StudentProfile, Administrator
+from .models import User, StudentProfile, Administrator
 
-class CustomUserSerializer(serializers.ModelSerializer):
-  class Meta:
-    model = CustomUser
-    fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'institution_id', 'created_at', 'updated_at'
-    ]
-    read_only_fields = ['id', 'created_at', 'updated_at']
-    extra_kwargs = {'password': {'required':False}}
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "user_id",
+            "name",
+            "email",
+            "phone",
+            "username",
+            "avatar_url",
+            "vibe_points",
+            "created_at",
+            "updated_at",
+        ]
 
 class StudentProfileSerializer(serializers.ModelSerializer):
-  user = CustomUserSerializer(read_only=True)
+  user = UserSerializer(read_only=True)
   user_id = serializers.IntegerField(write_only=True, required=False)
   email = serializers.EmailField(source='user.email', read_only=True)
 
@@ -20,8 +27,8 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     read_only_fields = ['created_at', 'updated_at']
 
 class AdministratorSerializer(serializers.ModelSerializer):
-  user = CustomUserSerializer(read_only=True)
-  user_id = serializers.PrimaryKeyRelatedField(queryset=CustomUser.objects.all(), source='user.id')
+  user = UserSerializer(read_only=True)
+  user_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='user.id')
 
   class Meta:
     model = Administrator
