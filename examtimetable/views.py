@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from django.db.models import QuerySet
 from courses.models import SemesterInfo, StudentCourseEnrollment
 from django.db import transaction
 from professor.pagination import ResultsSetPagination
@@ -262,7 +262,7 @@ class ExamScheduleListView(ListAPIView):
     serializer_class = ExamScheduleSerializer
     pagination_class = ResultsSetPagination
 
-    def get_queryset(self) -> QuerySet[ExamSchedule]:  # type: ignore[override]
+    def get_queryset(self) -> QuerySet[ExamSchedule]:
         queryset = ExamSchedule.objects.all()
         course_code = self.request.query_params.get("course_code")
         semester_id = self.request.query_params.get("semester_id")
