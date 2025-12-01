@@ -3,6 +3,7 @@ from openpyxl import load_workbook
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import re
+from utils.compute_datetime import compute_datetime_str
 
 # parses nursing exam timetable
 def nursing_exam_timetable_parser(file):
@@ -19,15 +20,19 @@ def nursing_exam_timetable_parser(file):
         for i in range(len(column_data_dict["Day"])):
             course_code = column_data_dict[time_key][i]
             if course_code not in time_range and course_code not in existing_course_codes:
+                day_val = column_data_dict["Day"][i]
+                time_val = '8:30AM-11:30AM' if "8.30" in time_range[0] else '1:30PM-4:30PM'
+
                 course_info = {
                     "course_code": column_data_dict[time_key][i].strip(), #.replace(" ", ""),
                     "coordinator": column_data_dict["Coordinator"][i],
-                    "time": '8:30AM-11:30AM' if "8.30" in time_range[0] else '1:30PM-4:30PM',
-                    "day": column_data_dict["Day"][i],
+                    "time": time_val,
+                    "day": day_val,
                     "campus": column_data_dict["Campus"][i],
                     "hrs": column_data_dict[f"Hours{'_Afternoon' if '_Afternoon' in time_key else ''}"][i],
                     "venue": column_data_dict[f"Venue{'_Afternoon' if '_Afternoon' in time_key else ''}"][i],
-                    "invigilator": column_data_dict[f"Invigilators{'_Afternoon' if '_Afternoon' in time_key else ''}"][i]
+                    "invigilator": column_data_dict[f"Invigilators{'_Afternoon' if '_Afternoon' in time_key else ''}"][i],
+                    "datetime_str": compute_datetime_str(day_val, time_val)
                 }
 
                 courses.append(course_info)
@@ -263,7 +268,7 @@ def parse_school_exam_timetable(file):
                     course_code = value
                     hours_str = "2"  # default
                     if hours and len(hours) > 0:
-                        hours_str = "2" if hours[0] == "-" else hours[0]
+                        hours_str = "2" if hours[0] == "-" else str(hours)
                     courses.append(
                         {
                             "course_code": course_code,
@@ -272,6 +277,7 @@ def parse_school_exam_timetable(file):
                             "venue": rooms.get(f"{idx}", ""),
                             "campus": "",
                             "coordinator": "",
+                            "hrs": hours_str,
                             "invigilator": "",
                             "datetime_str": None,
                         }
@@ -565,6 +571,16 @@ def kca_extractor(file):
                 return str(date_val)
         return str(date_val).strip()
 
+
+
+    def normalize_header(header_str):
+        if not header_str:
+            return ""
+        normalized = str(header_str).upper().strip()
+        normalized = re.sub(r'[^\w\s]', '', normalized)
+        normalized = re.sub(r'\s+', '_', normalized)
+        return normalized
+
     wb_obj = load_workbook(file, data_only=True)
 
     key_map = {
@@ -573,8 +589,8 @@ def kca_extractor(file):
         "VENUE": "ROOM|VENUE",
         "UNIT_CODE": "UNIT_CODE|UNIT CODE",
         "CAMPUS": "CAMPUS",
-        "COORDINATOR": "COORDINATOR",
-        "INVIGILATOR": "INVIGILATOR|INVIGILATORS",
+        "COORDINATOR": "INVIGILATOR OF THE DAY",
+        "INVIGILATOR": "INVIGILATORS|PRINCIPAL INVIGILATORS|INVIGILATOR",
     }
     unit_code_pattern = re.compile(r"^[A-Z]{2,4}\s*\d{3,4}")
 
@@ -597,7 +613,7 @@ def kca_extractor(file):
             continue
 
         norm_headers = {
-            h.upper().strip().replace(" ", "_"): idx
+            normalize_header(h): idx
             for idx, h in enumerate(header_row)
             if h
         }
@@ -613,8 +629,9 @@ def kca_extractor(file):
 
             unit_code = ""
             for pattern in key_map["UNIT_CODE"].split("|"):
-                if pattern in norm_headers:
-                    unit_code = str(row[norm_headers[pattern]]).strip()
+                norm_pattern = normalize_header(pattern)
+                if norm_pattern in norm_headers:
+                    unit_code = str(row[norm_headers[norm_pattern]]).strip()
                     break
 
             norm_uc = unit_code.upper().replace(" ", "").replace("_", "")
@@ -642,8 +659,9 @@ def kca_extractor(file):
 
             for out_key, patterns in key_map.items():
                 for pattern in patterns.split("|"):
-                    if pattern in norm_headers:
-                        val = row[norm_headers[pattern]]
+                    norm_pattern = normalize_header(pattern)
+                    if norm_pattern in norm_headers:
+                        val = row[norm_headers[norm_pattern]]
                         if out_key == "DATE":
                             val = convert_date(val)
                             current_entry["day"] = str(val).strip()
@@ -661,6 +679,10 @@ def kca_extractor(file):
                         elif out_key == "INVIGILATOR":
                             current_entry["invigilator"] = str(val).strip()
                         break
+
+            current_entry["datetime_str"] = compute_datetime_str(
+                current_entry["day"], current_entry["time"]
+            )
 
         if current_entry:
             courses.append(current_entry)
