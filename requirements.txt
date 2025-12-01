@@ -11,3 +11,4 @@ types-pyyaml==6.0.12.20250915
 typing-extensions==4.15.0
 uv==0.9.8
 xlrd==2.0.2
+gunicorn==23.0.0
