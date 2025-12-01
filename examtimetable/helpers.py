@@ -431,6 +431,36 @@ def kca_extractor(file):
     Returns standardized format: course_code, day, time, venue
     """
 
+    def compute_hours(formatted_time: str) -> str:
+        """
+        Defaults to '2' on any parsing issues.
+        """
+        if not formatted_time or "-" not in str(formatted_time):
+            return "2"
+
+        try:
+            start_str, end_str = str(formatted_time).split("-", 1)
+            start_str = start_str.strip()
+            end_str = end_str.strip()
+
+            def parse_time(s: str):
+                for fmt in ["%I:%M%p", "%I:%M %p", "%H:%M", "%H.%M"]:
+                    try:
+                        return datetime.strptime(s, fmt)
+                    except ValueError:
+                        continue
+                return None
+
+            start_dt = parse_time(start_str)
+            end_dt = parse_time(end_str)
+            if not start_dt or not end_dt:
+                return "2"
+
+            hrs = (end_dt - start_dt).total_seconds() / 3600
+            return str(int(hrs)) if hrs.is_integer() else str(hrs)
+        except Exception:
+            return "2"
+
     def format_time(time_str):
         """
         Standardizes various time formats to (8:00AM-10:00AM)
@@ -534,43 +564,65 @@ def kca_extractor(file):
         return str(date_val).strip()
 
     wb_obj = load_workbook(file, data_only=True)
-    sheet = wb_obj.active
 
-    # Find header row
-    header_row = None
-    header_idx = 0
-    for row_idx, row in enumerate(sheet.iter_rows(values_only=True) if sheet else [], start=1):
-        if any('UNIT CODE' in str(cell).upper() for cell in row if cell):
-            header_row = list(map(str, row))
-            header_idx = row_idx
-            break
-    if not header_row:
-        return []
-
-    # Normalize headers
-    norm_headers = {h.upper().strip().replace(' ', '_'): idx for idx, h in enumerate(header_row) if h}
-
-    # Only map the 4 required fields
     key_map = {
         "DATE": "DATE",
         "TIME": "TIME",
-        "ROOM": "ROOM|VENUE",
+        "VENUE": "ROOM|VENUE",
         "UNIT_CODE": "UNIT_CODE|UNIT CODE",
+        "CAMPUS": "CAMPUS",
+        "COORDINATOR": "COORDINATOR",
+        "INVIGILATOR": "INVIGILATOR|INVIGILATORS",
     }
+    unit_code_pattern = re.compile(r"^[A-Z]{2,4}\s*\d{3,4}")
 
-    courses: List[Dict[str, Any]] = []
-    current_entry: Optional[Dict[str, Any]] = None
+    all_courses: List[Dict[str, Any]] = []
 
-    for row_idx, row in enumerate(sheet.iter_rows(min_row=header_idx + 1, values_only=True) if sheet else [], start=header_idx + 1):
-        row = list(map(lambda x: x if x is not None else "", row))
+    for sheet_name in wb_obj.sheetnames:
+        sheet = wb_obj[sheet_name]
 
-        unit_code = ""
-        for pattern in key_map["UNIT_CODE"].split('|'):
-            if pattern in norm_headers:
-                unit_code = str(row[norm_headers[pattern]]).strip()
+        header_row: Optional[List[str]] = None
+        header_idx = 0
+        for row_idx, row in enumerate(
+            sheet.iter_rows(values_only=True) if sheet else [], start=1
+        ):
+            if any("UNIT CODE" in str(cell).upper() for cell in row if cell):
+                header_row = [str(cell) if cell is not None else "" for cell in row]
+                header_idx = row_idx
                 break
 
-        if unit_code:
+        if not header_row:
+            continue
+
+        norm_headers = {
+            h.upper().strip().replace(" ", "_"): idx
+            for idx, h in enumerate(header_row)
+            if h
+        }
+
+        courses: List[Dict[str, Any]] = []
+        current_entry: Optional[Dict[str, Any]] = None
+
+        for row_idx, row in enumerate(
+            sheet.iter_rows(min_row=header_idx + 1, values_only=True) if sheet else [],
+            start=header_idx + 1,
+        ):
+            row = [cell if cell is not None else "" for cell in row]
+
+            unit_code = ""
+            for pattern in key_map["UNIT_CODE"].split("|"):
+                if pattern in norm_headers:
+                    unit_code = str(row[norm_headers[pattern]]).strip()
+                    break
+
+            norm_uc = unit_code.upper().replace(" ", "").replace("_", "")
+            if (
+                not unit_code
+                or norm_uc in {"UNITCODE", "UNIT", "TIME", "DATE", "DAY", "VENUE", "ROOM", "EXAMINATION"}
+                or not unit_code_pattern.search(unit_code.upper())
+            ):
+                continue
+
             if current_entry:
                 courses.append(current_entry)
 
@@ -578,11 +630,16 @@ def kca_extractor(file):
                 "course_code": unit_code,
                 "day": "",
                 "time": "",
-                "venue": ""
+                "venue": "",
+                "campus": "",
+                "coordinator": "",
+                "hrs": "",
+                "invigilator": "",
+                "datetime_str": None,
             }
 
             for out_key, patterns in key_map.items():
-                for pattern in patterns.split('|'):
+                for pattern in patterns.split("|"):
                     if pattern in norm_headers:
                         val = row[norm_headers[pattern]]
                         if out_key == "DATE":
@@ -590,12 +647,22 @@ def kca_extractor(file):
                             current_entry["day"] = str(val).strip()
                         elif out_key == "TIME":
                             raw_time = str(val)
-                            current_entry["time"] = format_time(raw_time)
-                        elif out_key == "ROOM":
+                            formatted = format_time(raw_time)
+                            current_entry["time"] = formatted
+                            current_entry["hrs"] = compute_hours(formatted)
+                        elif out_key == "VENUE":
                             current_entry["venue"] = str(val).strip()
+                        elif out_key == "CAMPUS":
+                            current_entry["campus"] = str(val).strip()
+                        elif out_key == "COORDINATOR":
+                            current_entry["coordinator"] = str(val).strip()
+                        elif out_key == "INVIGILATOR":
+                            current_entry["invigilator"] = str(val).strip()
                         break
 
-    if current_entry:
-        courses.append(current_entry)
+        if current_entry:
+            courses.append(current_entry)
 
-    return courses
+        all_courses.extend(courses)
+
+    return all_courses
