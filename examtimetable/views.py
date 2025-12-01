@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import QuerySet
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -243,10 +244,9 @@ class ExamScheduleListView(ListAPIView):
     Query params: course_code (optional), semester_id (optional)
     """
     serializer_class = ExamScheduleSerializer
-    queryset = ExamSchedule.objects.all()
     pagination_class = ResultsSetPagination
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[ExamSchedule]:  # type: ignore[override]
         queryset = ExamSchedule.objects.all()
         course_code = self.request.query_params.get('course_code')
         semester_id = self.request.query_params.get('semester_id')
