@@ -236,6 +236,14 @@ class ParseExamTimetableView(APIView):
                     else:
                         updated_count += 1
                 else:
+                    # duplicate course, we handle by deleting duplicate courses
+                    if serializer.errors.get('course_code')[0] == \
+                        "exam schedule with this course code already exists.":
+                        dup_course = ExamSchedule.objects.get(
+                            course_code=course_code,
+                        )
+                        dup_course.delete()
+                        continue
                     return Response(
                         {
                             "error": f"Validation error for course {course_code}: {serializer.errors}"

@@ -171,7 +171,7 @@ def parse_nursing_timetable(file_path):
                 "venue":venue,
                 "time":course_time
                 })
-
+    print(courses)
     return courses
 
 def parse_school_exam_timetable(file):
@@ -212,11 +212,6 @@ def parse_school_exam_timetable(file):
 
     work_sheets = wb_obj.sheetnames # getting available work sheets
 
-    # getting info from from first workbook
-    # first_work_sheet = wb_obj[work_sheets[0]]
-    # for sheet in book.worksheets: #For each worksheet
-
-
     rooms = {} # will hold room informationhold information about courses
 
     courses = [] # will hold courses information
@@ -249,6 +244,9 @@ def parse_school_exam_timetable(file):
                 if value is None:
                     continue
 
+                if value == "CHAPEL":
+                    continue
+
                 # checking if its date and day specification
                 if isinstance(value, datetime):
                     day = days_of_the_week[value.weekday()] + " " + str(value.date()).replace("-", "/")
@@ -258,6 +256,7 @@ def parse_school_exam_timetable(file):
                 # checking if its time specification
                 elif isinstance(value, str) and len(value) > 0 and value[0].isdigit():
                     course_time = value.strip()
+                    # print(course_time)
                     if "-" in course_time:
                         start_time = course_time.split("-")[0]
                         end_time = course_time.split("-")[1]
