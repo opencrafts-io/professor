@@ -10,23 +10,29 @@ class SemesterInfoSerializer(serializers.ModelSerializer):
 class CourseSerializer(serializers.ModelSerializer):
   semester_code = serializers.CharField(source='semester.code', read_only=True)
   semester_name = serializers.CharField(source='semester.name', read_only=True)
-  semester_id = serializers.IntegerField(write_only=True, required=False)
+  semester_id = serializers.IntegerField(write_only=True, required=True)
 
   class Meta:
     model = Course
     fields = '__all__'
-    read_only_fields = ['created_at', 'updated_at']
+    read_only_fields = ['created_at', 'updated_at', 'semester']
 
   def create(self, validated_data):
     semester_id = validated_data.pop('semester_id', None)
     if semester_id:
-      validated_data['semester'] = SemesterInfo.objects.get(id=semester_id)
+      try:
+        validated_data['semester'] = SemesterInfo.objects.get(id=semester_id)
+      except SemesterInfo.DoesNotExist:
+        raise serializers.ValidationError({'semester_id': f'Semester with id {semester_id} does not exist'})
     return super().create(validated_data)
 
   def update(self, instance, validated_data):
     semester_id = validated_data.pop('semester_id', None)
     if semester_id:
-      validated_data['semester'] = SemesterInfo.objects.get(id=semester_id)
+      try:
+        validated_data['semester'] = SemesterInfo.objects.get(id=semester_id)
+      except SemesterInfo.DoesNotExist:
+        raise serializers.ValidationError({'semester_id': f'Semester with id {semester_id} does not exist'})
     return super().update(instance, validated_data)
 
 # TODO: Confirm if grades have to be linked to semesters or courses.
@@ -103,7 +109,7 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
   class Meta:
     model = StudentCourseEnrollment
     fields = '__all__'
-    read_only_fields = ['enrolled_at']
+    read_only_fields = ['enrolled_at', 'student', 'course', 'semester']
 
   def create(self, validated_data):
     student_profile_id = validated_data.pop('student_profile_id', None)

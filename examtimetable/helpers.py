@@ -3,6 +3,7 @@ from openpyxl import load_workbook
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import re
+from utils.compute_datetime import compute_datetime_str
 
 # parses nursing exam timetable
 def nursing_exam_timetable_parser(file):
@@ -19,15 +20,19 @@ def nursing_exam_timetable_parser(file):
         for i in range(len(column_data_dict["Day"])):
             course_code = column_data_dict[time_key][i]
             if course_code not in time_range and course_code not in existing_course_codes:
+                day_val = column_data_dict["Day"][i]
+                time_val = '8:30AM-11:30AM' if "8.30" in time_range[0] else '1:30PM-4:30PM'
+
                 course_info = {
                     "course_code": column_data_dict[time_key][i].strip(), #.replace(" ", ""),
                     "coordinator": column_data_dict["Coordinator"][i],
-                    "time": '8:30AM-11:30AM' if "8.30" in time_range[0] else '1:30PM-4:30PM',
-                    "day": column_data_dict["Day"][i],
+                    "time": time_val,
+                    "day": day_val,
                     "campus": column_data_dict["Campus"][i],
                     "hrs": column_data_dict[f"Hours{'_Afternoon' if '_Afternoon' in time_key else ''}"][i],
                     "venue": column_data_dict[f"Venue{'_Afternoon' if '_Afternoon' in time_key else ''}"][i],
-                    "invigilator": column_data_dict[f"Invigilators{'_Afternoon' if '_Afternoon' in time_key else ''}"][i]
+                    "invigilator": column_data_dict[f"Invigilators{'_Afternoon' if '_Afternoon' in time_key else ''}"][i],
+                    "datetime_str": compute_datetime_str(day_val, time_val)
                 }
 
                 courses.append(course_info)
@@ -175,11 +180,31 @@ def parse_school_exam_timetable(file):
         Returns the difference in hrs between two
         time intervals
         """
+        start_time = start_time.strip()
+        end_time = end_time.strip()
 
-        format = '%I:%M%p'
-        start_time = datetime.strptime(start_time, format)
-        end_time = datetime.strptime(end_time, format)
-        hrs = (end_time - start_time).total_seconds() / 3600
+        formats = ["%I:%M%p", "%H:%M", "%I:%M %p", "%H:%M "]
+        start_dt = None
+        end_dt = None
+
+        for fmt in formats:
+            try:
+                start_dt = datetime.strptime(start_time, fmt)
+                break
+            except ValueError:
+                continue
+
+        for fmt in formats:
+            try:
+                end_dt = datetime.strptime(end_time, fmt)
+                break
+            except ValueError:
+                continue
+
+        if start_dt is None or end_dt is None:
+            return "2"
+
+        hrs = (end_dt - start_dt).total_seconds() / 3600
         return str(hrs)
 
     # loading the workbook
@@ -233,22 +258,28 @@ def parse_school_exam_timetable(file):
                 # checking if its time specification
                 elif isinstance(value, str) and len(value) > 0 and value[0].isdigit():
                     course_time = value.strip()
-                    start_time = course_time.split("-")[0]
-                    end_time = course_time.split("-")[1]
-                    hours = time_difference(start_time, end_time)
+                    if "-" in course_time:
+                        start_time = course_time.split("-")[0]
+                        end_time = course_time.split("-")[1]
+                        hours = time_difference(start_time, end_time)
+                    else:
+                        hours = "2"
                 elif isinstance(value, str):
                     course_code = value
                     hours_str = "2"  # default
                     if hours and len(hours) > 0:
-                        hours_str = "2" if hours[0] == "-" else hours[0]
+                        hours_str = "2" if hours[0] == "-" else str(hours)
                     courses.append(
                         {
                             "course_code": course_code,
                             "day": day,
                             "time": course_time,
-                            "venue": rooms.get(f'{idx}', ""),
-                            # handles errors recorded in exam timetable defaults to 2
+                            "venue": rooms.get(f"{idx}", ""),
+                            "campus": "",
+                            "coordinator": "",
                             "hrs": hours_str,
+                            "invigilator": "",
+                            "datetime_str": None,
                         }
                     )
     return courses
@@ -405,8 +436,38 @@ def strath_extractor(file):
 def kca_extractor(file):
     """
     Extracts TT data for KCA University
-    Resulted to using simple regex to handle the different formats in different timetables.
+    Returns standardized format: course_code, day, time, venue
     """
+
+    def compute_hours(formatted_time: str) -> str:
+        """
+        Defaults to '2' on any parsing issues.
+        """
+        if not formatted_time or "-" not in str(formatted_time):
+            return "2"
+
+        try:
+            start_str, end_str = str(formatted_time).split("-", 1)
+            start_str = start_str.strip()
+            end_str = end_str.strip()
+
+            def parse_time(s: str):
+                for fmt in ["%I:%M%p", "%I:%M %p", "%H:%M", "%H.%M"]:
+                    try:
+                        return datetime.strptime(s, fmt)
+                    except ValueError:
+                        continue
+                return None
+
+            start_dt = parse_time(start_str)
+            end_dt = parse_time(end_str)
+            if not start_dt or not end_dt:
+                return "2"
+
+            hrs = (end_dt - start_dt).total_seconds() / 3600
+            return str(int(hrs)) if hrs.is_integer() else str(hrs)
+        except Exception:
+            return "2"
 
     def format_time(time_str):
         """
@@ -510,118 +571,122 @@ def kca_extractor(file):
                 return str(date_val)
         return str(date_val).strip()
 
-    def compute_session_from_time(formatted_time):
-        """Map formatted time to session number"""
-        if formatted_time == "8:00AM-10:00AM":
-            return "1"
-        elif formatted_time == "11:00AM-1:00PM":
-            return "2"
-        elif formatted_time == "2:00PM-4:00PM":
-            return "3"
-        elif formatted_time == "5:00PM-7:00PM":
-            return "4"
-        else:
+
+
+    def normalize_header(header_str):
+        if not header_str:
             return ""
+        normalized = str(header_str).upper().strip()
+        normalized = re.sub(r'[^\w\s]', '', normalized)
+        normalized = re.sub(r'\s+', '_', normalized)
+        return normalized
 
     wb_obj = load_workbook(file, data_only=True)
-    sheet = wb_obj.active
-
-    # Find header row
-    header_row = None
-    header_idx = 0
-    for row_idx, row in enumerate(sheet.iter_rows(values_only=True) if sheet else [], start=1):
-        if any('UNIT CODE' in str(cell).upper() for cell in row if cell):
-            header_row = list(map(str, row))
-            header_idx = row_idx
-            break
-    if not header_row:
-        return []
-
-    # Normalize headers
-    norm_headers = {h.upper().strip().replace(' ', '_'): idx for idx, h in enumerate(header_row) if h}
 
     key_map = {
-        "SESSION": "SESSION",
         "DATE": "DATE",
         "TIME": "TIME",
-        "ROOM": "ROOM|VENUE",
+        "VENUE": "ROOM|VENUE",
         "UNIT_CODE": "UNIT_CODE|UNIT CODE",
-        "UNIT_NAME": "UNIT_NAME|UNIT NAME",
-        "PRINCIPAL_INVIGILATOR": "PRINCIPAL_INVIGILATORS|PRINCIPAL INVIGILATORS - MAIN|PRINCIPAL INVIGILATORS (MAIN)|INVIGILATOR OF THE SESSION",
-        "SUPPORT_INVIGILATOR": "SUPPORT_INVIGILATORS|ADDITIONAL_INVIGILATORS_MAIN|OTHER INVIGILATORS (MAIN)",
-        "STUDENT_COUNT": "COUNTER|COUNT",
-        "PROGRAM": "PROGRAM_NAME|PROG",
-        "MODE_OF_STUDY": "MODE_OF_STUDY",
-        "SCHOOL": "SCHOOL",
-        "DEPARTMENT": "DEPARTMENT|DEPARMENT",
-        "TRIMESTER": "TRIMESTER",
         "CAMPUS": "CAMPUS",
-        "SESSION_LEADER": "SESSION_LEADER",
-        "REMARKS": "REMARKS",
+        "COORDINATOR": "INVIGILATOR OF THE DAY",
+        "INVIGILATOR": "INVIGILATORS|PRINCIPAL INVIGILATORS|INVIGILATOR",
     }
+    unit_code_pattern = re.compile(r"^[A-Z]{2,4}\s*\d{3,4}")
 
-    courses: List[Dict[str, Any]] = []
-    current_entry: Optional[Dict[str, Any]] = None
+    all_courses: List[Dict[str, Any]] = []
 
-    for row_idx, row in enumerate(sheet.iter_rows(min_row=header_idx + 1, values_only=True) if sheet else [], start=header_idx + 1):
-        row = list(map(lambda x: x if x is not None else "", row))
+    for sheet_name in wb_obj.sheetnames:
+        sheet = wb_obj[sheet_name]
 
-        unit_code = ""
-        for pattern in key_map["UNIT_CODE"].split('|'):
-            if pattern in norm_headers:
-                unit_code = str(row[norm_headers[pattern]]).strip()
+        header_row: Optional[List[str]] = None
+        header_idx = 0
+        for row_idx, row in enumerate(
+            sheet.iter_rows(values_only=True) if sheet else [], start=1
+        ):
+            if any("UNIT CODE" in str(cell).upper() for cell in row if cell):
+                header_row = [str(cell) if cell is not None else "" for cell in row]
+                header_idx = row_idx
                 break
 
-        if unit_code:
+        if not header_row:
+            continue
+
+        norm_headers = {
+            normalize_header(h): idx
+            for idx, h in enumerate(header_row)
+            if h
+        }
+
+        courses: List[Dict[str, Any]] = []
+        current_entry: Optional[Dict[str, Any]] = None
+
+        for row_idx, row in enumerate(
+            sheet.iter_rows(min_row=header_idx + 1, values_only=True) if sheet else [],
+            start=header_idx + 1,
+        ):
+            row = [cell if cell is not None else "" for cell in row]
+
+            unit_code = ""
+            for pattern in key_map["UNIT_CODE"].split("|"):
+                norm_pattern = normalize_header(pattern)
+                if norm_pattern in norm_headers:
+                    unit_code = str(row[norm_headers[norm_pattern]]).strip()
+                    break
+
+            norm_uc = unit_code.upper().replace(" ", "").replace("_", "")
+            if (
+                not unit_code
+                or norm_uc in {"UNITCODE", "UNIT", "TIME", "DATE", "DAY", "VENUE", "ROOM", "EXAMINATION"}
+                or not unit_code_pattern.search(unit_code.upper())
+            ):
+                continue
+
             if current_entry:
                 courses.append(current_entry)
-            current_entry = {"course_code": unit_code}
-            raw_time = ""
+
+            current_entry = {
+                "course_code": unit_code,
+                "day": "",
+                "time": "",
+                "venue": "",
+                "campus": "",
+                "coordinator": "",
+                "hrs": "",
+                "invigilator": "",
+                "datetime_str": None,
+            }
+
             for out_key, patterns in key_map.items():
-                for pattern in patterns.split('|'):
-                    if pattern in norm_headers:
-                        val = row[norm_headers[pattern]]
+                for pattern in patterns.split("|"):
+                    norm_pattern = normalize_header(pattern)
+                    if norm_pattern in norm_headers:
+                        val = row[norm_headers[norm_pattern]]
                         if out_key == "DATE":
                             val = convert_date(val)
+                            current_entry["day"] = str(val).strip()
                         elif out_key == "TIME":
                             raw_time = str(val)
-                            val = format_time(raw_time)
-                        current_entry[out_key.lower()] = str(val).strip()
-                        break
-                if out_key.lower() not in current_entry:
-                    current_entry[out_key.lower()] = ""
-            program_val = current_entry.get("program", "")
-            if isinstance(program_val, str):
-                current_entry["program"] = [program_val] if program_val else []
-            else:
-                current_entry["program"] = program_val if isinstance(program_val, list) else []
-            current_entry["venue"] = current_entry.pop("room", "")
-
-            # Handle formula in session
-            if current_entry["session"].startswith('=IF'):
-                current_entry["session"] = compute_session_from_time(current_entry["time"])
-
-        elif current_entry:
-            for out_key, patterns in key_map.items():
-                for pattern in patterns.split('|'):
-                    if pattern in norm_headers:
-                        val = str(row[norm_headers[pattern]]).strip()
-                        if val and out_key.lower() in ["program", "venue", "principal_invigilator", "support_invigilator"]:
-                            existing_val = current_entry.get(out_key.lower(), "")
-                            if isinstance(existing_val, str):
-                                current_entry[out_key.lower()] = [existing_val] if existing_val else []
-                            elif not isinstance(existing_val, list):
-                                current_entry[out_key.lower()] = []
-                            if isinstance(current_entry[out_key.lower()], list):
-                                current_entry[out_key.lower()].append(val)
+                            formatted = format_time(raw_time)
+                            current_entry["time"] = formatted
+                            current_entry["hrs"] = compute_hours(formatted)
+                        elif out_key == "VENUE":
+                            current_entry["venue"] = str(val).strip()
+                        elif out_key == "CAMPUS":
+                            current_entry["campus"] = str(val).strip()
+                        elif out_key == "COORDINATOR":
+                            current_entry["coordinator"] = str(val).strip()
+                        elif out_key == "INVIGILATOR":
+                            current_entry["invigilator"] = str(val).strip()
                         break
 
-    if current_entry:
-        courses.append(current_entry)
+            current_entry["datetime_str"] = compute_datetime_str(
+                current_entry["day"], current_entry["time"]
+            )
 
-    for course in courses:
-        for key in ["program", "venue", "principal_invigilator", "support_invigilator"]:
-            if isinstance(course[key], list):
-                course[key] = ", ".join(set(filter(None, course[key])))  # Unique non-empty
+        if current_entry:
+            courses.append(current_entry)
 
-    return courses
+        all_courses.extend(courses)
+
+    return all_courses
