@@ -4,10 +4,9 @@ from courses.models import SemesterInfo
 
 
 class ExamSchedule(models.Model):
-    course_code = models.CharField(max_length=50)
+    course_code = models.CharField(max_length=50, unique=True)
     course_name = models.CharField(max_length=255, null=True, blank=True)
     semester = models.ForeignKey(SemesterInfo, on_delete=models.CASCADE, related_name='exam_schedule', null=True, blank=True)
-
     exam_date = models.DateField(null=True, blank=True)
     start_time = models.TimeField(null=True, blank=True)
     end_time = models.TimeField(null=True, blank=True)
