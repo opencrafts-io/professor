@@ -236,6 +236,14 @@ class ParseExamTimetableView(APIView):
                     else:
                         updated_count += 1
                 else:
+                    # duplicate course, we handle by deleting duplicate courses
+                    if serializer.errors.get('course_code')[0] == \
+                        "exam schedule with this course code already exists.":
+                        dup_course = ExamSchedule.objects.get(
+                            course_code=course_code,
+                        )
+                        dup_course.delete()
+                        continue
                     return Response(
                         {
                             "error": f"Validation error for course {course_code}: {serializer.errors}"
@@ -274,7 +282,6 @@ class ExamScheduleListView(ListAPIView):
 
         return queryset
 
-
 class ExamScheduleByCourseCodesView(APIView):
     """
     Get exam schedules for a list of course codes.
@@ -282,7 +289,7 @@ class ExamScheduleByCourseCodesView(APIView):
 
     def post(self, request):
         institution_id = request.data.get("institution_id")
-        course_codes = request.data.get("course_codes", [])
+        course_codes = request.data.get("course_codes")
 
         if not institution_id:
             return Response(
@@ -295,11 +302,23 @@ class ExamScheduleByCourseCodesView(APIView):
                 {"error": "course_codes must be a non-empty list"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        
+        exams_info = [] # will hold the Data to return 
 
-        exams = ExamSchedule.objects.filter(
-            institution_id=institution_id, course_code__in=course_codes
-        )
-        serializer = ExamScheduleSerializer(exams, many=True)
+        for course_code in course_codes:
+            # removing optional spaces to the search query to match spaces between searches
+            course_code = course_code.replace(" ", "")
+
+            if "NUR" in course_code or "NUP" in course_code:
+                course_code = course_code[:-1]
+
+            mod_course_code = "".join(f"{char}\s*" for char in course_code)
+            for exam_info in ExamSchedule.objects.filter(
+                course_code__iregex = f".*{mod_course_code}.*",
+            ).all():
+                exams_info.append(exam_info)
+
+        serializer = ExamScheduleSerializer(exams_info, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
