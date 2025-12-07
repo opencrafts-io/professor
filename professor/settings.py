@@ -136,10 +136,10 @@ WSGI_APPLICATION = "professor.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME", "mr_db"),
-        "USER": os.getenv("DB_USER", "mr_user"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "mr_password"),
-        "HOST": os.getenv("DB_HOST", "localhost"),
+        "NAME": os.getenv("DB_NAME", "professor"),
+        "USER": os.getenv("DB_USER", "asdfghjkljsdfadfgj"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "sdfgkhldgsfASZFxgjkhfdgsxg"),
+        "HOST": os.getenv("DB_HOST", "professor-db-rw.production.svc.cluster.local"),
         "PORT": os.getenv("DB_PORT", "5432"),
     }
 }
