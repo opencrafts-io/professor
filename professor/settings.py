@@ -50,9 +50,9 @@ INSTALLED_APPS = [
 
 LOGGING = {
     "version": 1,
-    "disable_existing_loggers": True,
+    "disable_existing_loggers": False,
     "formatters": {
-        "standard": {"format": "%(asctime)s [%(levelname)s]- %(message)s"},
+        "standard": {"format": "%(asctime)s [%(levelname)s: %(message)s"},
         "json": {
             "()": "professor.log_formatter.StandardJSONLogFormatter",
         },
@@ -67,20 +67,20 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["console"],
-            "level": "INFO",
-            "propagate": True,
+            "level": "ERROR",
+            "propagate": False,
         },
         "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "professor": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
-        "django.server": {
-            "handlers": [],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "professor": {
+        "": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
@@ -101,6 +101,7 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
+    "professor.middlewares.request_logging_middleware.RequestLoggingMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -187,4 +188,3 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # AUTH_USER_MODEL = "users.User"
-

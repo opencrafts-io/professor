@@ -1,5 +1,6 @@
 from json_log_formatter import JSONFormatter
 
+
 class StandardJSONLogFormatter(JSONFormatter):
     def json_record(self, message, extra, record):
         request = extra.pop("request", None)
@@ -14,6 +15,9 @@ class StandardJSONLogFormatter(JSONFormatter):
             "file": record.filename,
             "exc_info": record.exc_info,
             "thread": record.thread,
+            # "pathname": record.pathname,
+            # "lineno": record.lineno,
         }
         extra = {**extra, **additional_info}
         return super().json_record(message, extra, record)
+

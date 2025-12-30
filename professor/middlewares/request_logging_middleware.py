@@ -26,7 +26,7 @@ class RequestLoggingMiddleware(MiddlewareMixin):
             remote_addr = f"{remote_addr}:{remote_port}"
 
         # Log the request
-        logger = logging.getLogger("django.request")
+        logger = logging.getLogger("professor")
         logger.info(
             "Request handled",
             extra={
