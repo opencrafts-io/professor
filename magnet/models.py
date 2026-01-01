@@ -4,7 +4,7 @@ from institutions.models import Institution
 
 
 # Create your models here.
-class MagnetConfig(models.Model):
+class MagnetScrappingCommand(models.Model):
     """
     A model representing a magnet command composed of instructions
     """
