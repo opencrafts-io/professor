@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from institutions.models import Institution
 
 
 # Create your models here.
@@ -7,6 +8,13 @@ class MagnetConfig(models.Model):
     """
     A model representing a magnet command composed of instructions
     """
+
+    institution = models.ForeignKey(
+        Institution,
+        on_delete=models.CASCADE,
+        related_name="institution_magnet_configs",
+        null=True,
+    )
 
     command_id = models.UUIDField(
         default=uuid.uuid4,
