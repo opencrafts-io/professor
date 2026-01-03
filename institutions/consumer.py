@@ -8,10 +8,10 @@ from .models import Institution
 @register
 class VerisafeInstitutionEventConsumer(BaseConsumer):
     def __init__(self) -> None:
-        self.queue_name = "io.opencrafts.keep_up.verisafe.institution.events"
-        self.exchange_name = "verisafe.exchange"
-        self.exchange_type = "fanout"
-        self.routing_key = "verisafe.institution.events"
+        self.queue_name = "io.opencrafts.professor.institution.events"
+        self.exchange_name = "professor.exchange"
+        self.exchange_type = "direct"
+        self.routing_key = "institution.events"
         self.logger = logging.getLogger(f"{type(self).__name__}")
 
     def handle_message(self, body: str, routing_key=None):
