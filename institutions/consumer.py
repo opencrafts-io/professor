@@ -23,9 +23,6 @@ class VerisafeInstitutionEventConsumer(BaseConsumer):
             )
             return
 
-        if not self.validate_event(event):
-            return
-
         payload = event.get("institution", {})
         metadata = event.get("meta", {})
         try:
@@ -36,10 +33,10 @@ class VerisafeInstitutionEventConsumer(BaseConsumer):
                         institution_id=int(payload["institution_id"]),
                         defaults={
                             "name": payload.get("name"),
-                            "web_pages": payload.get("username"),
-                            "domains": payload.get("email"),
-                            "country": payload.get("phone"),
-                            "state_provice": payload.get("avatar_url"),
+                            "web_pages": payload.get("web_pages"),
+                            "domains": payload.get("domains"),
+                            "country": payload.get("country"),
+                            "state_province": payload.get("state_province"),
                         },
                     )
                     action = "created" if created else "updated"
