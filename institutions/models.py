@@ -21,7 +21,11 @@ class Institution(models.Model):
     )
     domains = ArrayField(models.CharField(max_length=255))
     country = models.CharField(max_length=100)
-    state_province = models.CharField(max_length=100)
+    state_province = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+    )
 
     def __str__(self) -> str:
         return f"{self.institution_id} - {self.name}"
