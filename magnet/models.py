@@ -27,6 +27,11 @@ class MagnetScrappingCommand(models.Model):
         null=False,
     )
 
+    url = models.URLField(
+        null=True,
+        blank=True,
+    )
+
     description = models.TextField(default="")
 
     requires_interaction = models.BooleanField(
