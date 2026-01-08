@@ -25,4 +25,5 @@ urlpatterns = [
     path("api/courses/", include("courses.urls")),
     path("api/exams/", include("examtimetable.urls")),
     path("api/users/", include("users.urls")),
+    path("api/magnet/", include("magnet.urls")),
 ]

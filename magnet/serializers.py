@@ -49,9 +49,7 @@ class ScrapingInstructionSerializer(serializers.Serializer):
 
 class MagnetScrappingCommandSerializer(ModelSerializer):
     instructions = ScrapingInstructionSerializer(many=True)
-    requires_interaction = serializers.BooleanField(
-        source="requiresInteraction", default=False
-    )
+    requires_interaction = serializers.BooleanField(default=False)
 
     class Meta:
         model = MagnetScrappingCommand
@@ -66,4 +64,14 @@ class MagnetScrappingCommandSerializer(ModelSerializer):
         ]
 
     def create(self, validated_data):
-        return super().create(validated_data)
+        instructions_data = validated_data.pop("instructions", [])
+        instance = MagnetScrappingCommand.objects.create(**validated_data)
+        instance.instructions = instructions_data
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        if "instructions" in validated_data:
+            instance.instructions = validated_data.pop("instructions")
+
+        return super().update(instance, validated_data)
