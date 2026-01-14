@@ -5,10 +5,8 @@ from rest_framework import serializers
 from .models import MagnetScrappingCommand
 
 class WaitStrategySerializer(serializers.Serializer):
-    # Map 'runtimeType' from JSON to 'type' in your logic
-    type = serializers.CharField(source='runtimeType') 
+    runtimeType = serializers.CharField()
     timeoutMs = serializers.IntegerField(default=30000, required=False)
-
     pattern = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     selector = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     quietDurationMs = serializers.IntegerField(required=False, allow_null=True)
