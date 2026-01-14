@@ -4,6 +4,7 @@ from rest_framework.serializers import (
 from rest_framework import serializers
 from .models import MagnetScrappingCommand
 
+
 class WaitStrategySerializer(serializers.Serializer):
     runtimeType = serializers.CharField()
     timeoutMs = serializers.IntegerField(default=30000, required=False)
@@ -19,11 +20,13 @@ class WaitStrategySerializer(serializers.Serializer):
     def validate(self, data):
         # Note: When using 'source', the key in 'data' becomes the source name (runtimeType)
         wait_type = data.get("runtimeType")
-        
+
         if wait_type == "waitForUrl" and not data.get("pattern"):
             raise serializers.ValidationError("URL strategy requires a pattern")
-        
-        if wait_type in ["waitForElement", "elementDisappear"] and not data.get("selector"):
+
+        if wait_type in ["waitForElement", "elementDisappear"] and not data.get(
+            "selector"
+        ):
             raise serializers.ValidationError(
                 f"{wait_type} strategy requires a selector"
             )
@@ -40,6 +43,16 @@ class ScrapingInstructionSerializer(serializers.Serializer):
     outputKey = serializers.CharField(required=False, allow_null=True)
     jsCode = serializers.CharField(required=False, allow_null=True)
     waitAfterExecution = serializers.BooleanField(default=False)
+
+    # Form configuration
+    valueKey = serializers.CharField(required=False, allow_null=True)
+    inputType = serializers.ChoiceField(
+        choices=["password", "text", "number", "email", "phone"],
+        allow_null=True,
+        required=False,
+    )
+
+    inputLabel = serializers.CharField(required=False, allow_null=True)
 
     # Nested Wait Strategy
     waitStrategy = WaitStrategySerializer(required=False, allow_null=True)
@@ -70,7 +83,7 @@ class MagnetScrappingCommandSerializer(ModelSerializer):
 
     def update(self, instance, validated_data):
         instructions = validated_data.pop("instructions", None)
-        
+
         if instructions is not None:
             instance.instructions = instructions
 
@@ -79,4 +92,3 @@ class MagnetScrappingCommandSerializer(ModelSerializer):
 
         instance.save()
         return instance
-     
