@@ -4,28 +4,28 @@ from rest_framework.serializers import (
 from rest_framework import serializers
 from .models import MagnetScrappingCommand
 
-
 class WaitStrategySerializer(serializers.Serializer):
-    # 'url', 'element', 'elementDisappear', 'networkIdle', 'any', 'all'
-    type = serializers.CharField()
+    # Map 'runtimeType' from JSON to 'type' in your logic
+    type = serializers.CharField(source='runtimeType') 
     timeoutMs = serializers.IntegerField(default=30000, required=False)
 
-    # Specific fields based on type
-    pattern = serializers.CharField(required=False)
-    selector = serializers.CharField(required=False)
-    quietDurationMs = serializers.IntegerField(required=False)
+    pattern = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    selector = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    quietDurationMs = serializers.IntegerField(required=False, allow_null=True)
 
     strategies = serializers.ListField(
         child=serializers.DictField(),
         required=False,
     )
 
-    def validate(self, data, *args, **kwargs):
-        """Logic to ensure the right fields exist for the right type."""
-        wait_type = data.get("type")
-        if wait_type == "url" and not data.get("pattern"):
+    def validate(self, data):
+        # Note: When using 'source', the key in 'data' becomes the source name (runtimeType)
+        wait_type = data.get("runtimeType")
+        
+        if wait_type == "waitForUrl" and not data.get("pattern"):
             raise serializers.ValidationError("URL strategy requires a pattern")
-        if wait_type in ["element", "elementDisappear"] and not data.get("selector"):
+        
+        if wait_type in ["waitForElement", "elementDisappear"] and not data.get("selector"):
             raise serializers.ValidationError(
                 f"{wait_type} strategy requires a selector"
             )
@@ -71,7 +71,14 @@ class MagnetScrappingCommandSerializer(ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
-        if "instructions" in validated_data:
-            instance.instructions = validated_data.pop("instructions")
+        instructions = validated_data.pop("instructions", None)
+        
+        if instructions is not None:
+            instance.instructions = instructions
 
-        return super().update(instance, validated_data)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+        return instance
+     
