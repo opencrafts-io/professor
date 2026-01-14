@@ -38,7 +38,7 @@ class MagnetScrappingCommand(models.Model):
         default=False,
     )
 
-    created_at = models.DateField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     instructions = models.JSONField(default=list)
 
