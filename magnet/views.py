@@ -23,4 +23,4 @@ class RetrieveMagnetCommandApiView(RetrieveAPIView):
         institution_id = self.kwargs["institution_id"]
         return MagnetScrappingCommand.objects.filter(
             institution_id=institution_id,
-        ).latest("created_at")
+        ).order_by("-created_at").first()
