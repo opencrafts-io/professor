@@ -57,6 +57,18 @@ class ScrapingInstructionSerializer(serializers.Serializer):
     # Nested Wait Strategy
     waitStrategy = WaitStrategySerializer(required=False, allow_null=True)
 
+    def validate(self, attrs):
+        instruction_type = attrs.get("type")
+        if instruction_type == "fill-form":
+            value_key = attrs.get("valueKey")
+
+            if value_key is None:
+                raise serializers.ValidationError(
+                    "instructions of type `fill-form` must have a non null valueKey"
+                )
+
+        return attrs
+
 
 class MagnetScrappingCommandSerializer(ModelSerializer):
     instructions = ScrapingInstructionSerializer(many=True)
