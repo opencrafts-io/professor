@@ -95,11 +95,12 @@ class VerisafeUserEventConsumer(BaseConsumer):
 
                         self.logger.info(
                             f"User @{user.username} connected to institution {institution.name}",
+                            extra={"user_id": user_id, "institution_id": institution_id, "event": "user.institution.connected"},
                         )
                     except User.DoesNotExist:
-                        self.logger.error(f"User {user_id} not found")
+                        self.logger.error(f"User {user_id} not found", extra={"user_id": user_id, "event": "user.institution.connected"})
                     except Institution.DoesNotExist:
-                        self.logger.error(f"Institution {institution_id} not found")
+                        self.logger.error(f"Institution {institution_id} not found", extra={"institution_id": institution_id, "event": "user.institution.connected"})
                 case _:
                     raise Exception(
                         "Failed to process user event due to incorrect event type"
