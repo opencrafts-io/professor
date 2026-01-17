@@ -70,8 +70,16 @@ class VerisafeUserEventConsumer(BaseConsumer):
                             extra={"user_id": user_id, "event": "user.deleted"},
                         )
                 case "user.institution.connected":
-                    user_id = uuid.UUID(payload["id"])
-                    institution_id = payload.get("institution_id")
+                    institution_connection = event.get("institution_connection", {})
+                    user_id = institution_connection.get("account_id")
+                    institution_id = institution_connection.get("institution_id")
+
+                    if not user_id or not institution_id:
+                        self.logger.error(
+                            "Missing account_id or institution_id",
+                            extra={"event": event},
+                        )
+                        return
 
                     try:
                         user = User.objects.get(user_id=user_id)
@@ -80,7 +88,7 @@ class VerisafeUserEventConsumer(BaseConsumer):
                         )
                         student_profile, created = StudentProfile.objects.get_or_create(
                             user=user,
-                            defaults={"student_id": payload.get("student_id", "")},
+                            defaults={"student_id": f"{user_id}"},
                         )
                         student_profile.institution = institution
                         student_profile.save()
