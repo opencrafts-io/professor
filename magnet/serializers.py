@@ -67,6 +67,14 @@ class ScrapingInstructionSerializer(serializers.Serializer):
                     "instructions of type `fill-form` must have a non null valueKey"
                 )
 
+        elif instruction_type == "extract":
+            output_key = attrs.get("outputKey")
+
+            if output_key is None:
+                raise serializers.ValidationError(
+                    "instructions of type extract must have a valid non null outputKey"
+                )
+
         return attrs
 
 
