@@ -1,5 +1,8 @@
 import uuid
+
 from django.db import models
+
+from institutions.models import Institution
 
 
 class User(models.Model):
@@ -38,6 +41,9 @@ class StudentProfile(models.Model):
         User, on_delete=models.CASCADE, related_name="student_profile"
     )
     student_id = models.CharField(max_length=100, unique=True)
+    institution = models.ForeignKey(
+        Institution, on_delete=models.SET_NULL, null=True, blank=True
+    )
 
     national_id = models.CharField(max_length=100, null=True, blank=True)
     nationality = models.CharField(max_length=100, null=True, blank=True)
@@ -104,3 +110,4 @@ class Credentials(models.Model):
 
     def __str__(self):
         return self.username
+

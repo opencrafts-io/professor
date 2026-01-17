@@ -1,9 +1,12 @@
 import json
-import uuid
 import logging
+import uuid
+
 from event_bus.consumer import BaseConsumer
 from event_bus.registry import register
-from .models import User
+from institutions.models import Institution
+
+from .models import StudentProfile, User
 
 
 @register
@@ -53,7 +56,9 @@ class VerisafeUserEventConsumer(BaseConsumer):
 
                 case "user.deleted":
                     user_id = payload.get("id")
-                    deleted_count, _ = User.objects.filter(user_id=uuid.UUID(user_id)).delete()
+                    deleted_count, _ = User.objects.filter(
+                        user_id=uuid.UUID(user_id)
+                    ).delete()
                     if deleted_count:
                         self.logger.info(
                             f"User {user_id} deleted successfully",
@@ -64,9 +69,33 @@ class VerisafeUserEventConsumer(BaseConsumer):
                             f"User {user_id} not found for deletion",
                             extra={"user_id": user_id, "event": "user.deleted"},
                         )
-             
+                case "user.institution.connected":
+                    user_id = uuid.UUID(payload["id"])
+                    institution_id = payload.get("institution_id")
+
+                    try:
+                        user = User.objects.get(user_id=user_id)
+                        institution = Institution.objects.get(
+                            institution_id=int(institution_id)
+                        )
+                        student_profile, created = StudentProfile.objects.get_or_create(
+                            user=user,
+                            defaults={"student_id": payload.get("student_id", "")},
+                        )
+                        student_profile.institution = institution
+                        student_profile.save()
+
+                        self.logger.info(
+                            f"User @{user.username} connected to institution {institution.name}",
+                        )
+                    except User.DoesNotExist:
+                        self.logger.error(f"User {user_id} not found")
+                    except Institution.DoesNotExist:
+                        self.logger.error(f"Institution {institution_id} not found")
                 case _:
-                        raise Exception("Failed to process user event due to incorrect event type")
+                    raise Exception(
+                        "Failed to process user event due to incorrect event type"
+                    )
 
         except Exception as e:
             self.logger.exception(
