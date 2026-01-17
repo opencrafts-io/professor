@@ -1,8 +1,9 @@
+import logging
 from time import time
 from typing import List
+
 import pika
 from django.conf import settings
-import logging
 
 
 class BaseConsumer:
@@ -25,6 +26,7 @@ class BaseConsumer:
             "user.created",
             "user.updated",
             "user.deleted",
+            "user.institution.connected",
         ]
         if metadata.get("event_type") not in expected_event_types:
             self.logger.error(
@@ -98,3 +100,4 @@ class BaseConsumer:
             f"[{str(type(self).__name__)}] Listening for events on queue {self.queue_name}, bound to exchange {self.exchange_name}",
         )
         ch.start_consuming()
+
