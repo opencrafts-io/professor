@@ -26,7 +26,6 @@ class BaseConsumer:
             "user.created",
             "user.updated",
             "user.deleted",
-            "user.institution.connected",
         ]
         if metadata.get("event_type") not in expected_event_types:
             self.logger.error(
