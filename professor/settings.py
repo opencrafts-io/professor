@@ -27,7 +27,7 @@ load_dotenv(dotenv_path=env_path)
 SECRET_KEY = "django-insecure-7^6*%@5)80f-6obitpqk$$&l91(^lu19@$hway2=f=^lfv%z--"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.getenv("DEBUG", False)
 
 ALLOWED_HOSTS = ["*"]
 
@@ -42,17 +42,20 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "event_bus",
+    "institutions",
     "courses",
     "examtimetable",
     "users",
+    "magnet",
 ]
 
 
 LOGGING = {
     "version": 1,
-    "disable_existing_loggers": True,
+    "disable_existing_loggers": False,
     "formatters": {
-        "standard": {"format": "%(asctime)s [%(levelname)s]- %(message)s"},
+        "standard": {"format": "%(asctime)s [%(levelname)s: %(message)s"},
         "json": {
             "()": "professor.log_formatter.StandardJSONLogFormatter",
         },
@@ -67,20 +70,20 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["console"],
-            "level": "INFO",
-            "propagate": True,
+            "level": "ERROR",
+            "propagate": False,
         },
         "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "professor": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
-        "django.server": {
-            "handlers": [],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "professor": {
+        "": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
@@ -98,9 +101,13 @@ RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", None)
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 30,
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "professor.verisafe_jwt_authentication.VerisafeJWTAuthentication",
+    ],
 }
 
 MIDDLEWARE = [
+    "professor.middlewares.request_logging_middleware.RequestLoggingMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -187,4 +194,3 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # AUTH_USER_MODEL = "users.User"
-
