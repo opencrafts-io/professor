@@ -11,6 +11,9 @@ logger = logging.getLogger('django')
 
 class VerisafeJWTAuthentication(BaseAuthentication):
     def authenticate(self, request):
+        if request.path == "/ping":
+            return None
+
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             logger.error("Request sent without valid authorization token")
