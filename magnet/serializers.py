@@ -125,6 +125,7 @@ class MagnetScrappingCommandSerializer(ModelSerializer):
             "command_id",
             "url",
             "instructions",
+            "created_at",
         ]
 
     def create(self, validated_data):
