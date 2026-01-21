@@ -6,31 +6,51 @@ from .models import MagnetScrappingCommand
 
 
 class WaitStrategySerializer(serializers.Serializer):
-    type = serializers.CharField()
+    type = serializers.CharField(
+        help_text="The type of wait strategy (url, element, etc.)"
+    )
+
     timeoutMs = serializers.IntegerField(default=30000, required=False)
-    pattern = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     selector = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    pattern = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     quietDurationMs = serializers.IntegerField(required=False, allow_null=True)
+
     strategies = serializers.ListField(
         child=serializers.DictField(),
         required=False,
     )
 
+    runtimeType = serializers.CharField(required=False, allow_null=True)
+
+    TYPE_MAPPING = {
+        "url": "waitForUrl",
+        "element": "waitForElement",
+        "elementDisappear": "waitForElementDisappear",
+        "any": "waitForAny",
+        "all": "waitForAll",
+        "networkIdle": "waitForNetworkIdle",
+    }
+
     def validate(self, attrs):
         wait_type = attrs.get("type")
 
         if wait_type == "url" and not attrs.get("pattern"):
-            raise serializers.ValidationError("URL strategy requires a pattern")
+            raise serializers.ValidationError(
+                {"pattern": "URL strategy requires a pattern"}
+            )
 
         if wait_type in ["element", "elementDisappear"] and not attrs.get("selector"):
             raise serializers.ValidationError(
-                f"{wait_type} strategy requires a selector"
+                {"selector": f"{wait_type} strategy requires a selector"}
             )
 
         if wait_type in ["any", "all"] and not attrs.get("strategies"):
             raise serializers.ValidationError(
-                f"{wait_type} strategy requires strategies list"
+                {"strategies": f"{wait_type} strategy requires strategies list"}
             )
+
+        if wait_type in self.TYPE_MAPPING:
+            attrs["runtimeType"] = self.TYPE_MAPPING[wait_type]
 
         return attrs
 
