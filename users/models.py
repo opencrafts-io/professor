@@ -101,6 +101,12 @@ class StudentProfile(models.Model):
     enrollment_date = models.DateField(null=True, blank=True)
     expected_graduation = models.DateField(null=True, blank=True)
 
+    profile_picture = models.URLField(
+        max_length=2048,
+        blank=True,
+        null=True,
+    )
+
     raw_data = models.JSONField(default=dict, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
