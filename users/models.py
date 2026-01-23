@@ -62,7 +62,7 @@ class StudentProfile(models.Model):
     enrollment_date = models.DateField(null=True, blank=True)
     expected_graduation = models.DateField(null=True, blank=True)
 
-    raw_data = models.JSONField(default=dict, blank=True)
+    raw_data = models.JSONField(default=dict, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -110,4 +110,3 @@ class Credentials(models.Model):
 
     def __str__(self):
         return self.username
-

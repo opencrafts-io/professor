@@ -17,10 +17,6 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
 class StudentProfileSerializer(serializers.ModelSerializer):
-  user = UserSerializer(read_only=True)
-  user_id = serializers.IntegerField(write_only=True, required=False)
-  email = serializers.EmailField(source='user.email', read_only=True)
-
   class Meta:
     model = StudentProfile
     fields = '__all__'
