@@ -3,10 +3,11 @@ from rest_framework import status
 from rest_framework.authentication import BaseAuthentication
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.exceptions import AuthenticationFailed
+
+from users.models import User
 from .verisafe_jwt import verify_verisafe_jwt  # from earlier
 
-
-logger = logging.getLogger('django')
+logger = logging.getLogger("django")
 
 
 class VerisafeJWTAuthentication(BaseAuthentication):
@@ -26,7 +27,19 @@ class VerisafeJWTAuthentication(BaseAuthentication):
             payload = verify_verisafe_jwt(token)
             request.verisafe_claims = payload
             request.user_id = payload["sub"]
-            # You can return a dummy user or create a real user model if needed
-            return (AnonymousUser(), None)
+            user = User.objects.filter(user_id=request.user_id).first()
+
+            if not user:
+                logger.warning(
+                    f"User {request.user_id} authenticated via JWT but not found in DB."
+                )
+                raise AuthenticationFailed(
+                    "User account not provisioned. Please contact support.",
+                    code="user_not_found",
+                )
+
+            # Success: User exists in DB and JWT is valid
+            request.verisafe_claims = payload
+            return (user, token)
         except Exception as e:
             raise AuthenticationFailed(str(e))
