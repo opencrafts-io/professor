@@ -31,6 +31,10 @@ class StudentProfileSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
 
+    user_id = serializers.PrimaryKeyRelatedField(
+        source="user", queryset=User.objects.all()
+    )
+
     def validate_profile_picture(self, value):
         try:
             if not value:
