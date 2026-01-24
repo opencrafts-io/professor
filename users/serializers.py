@@ -52,7 +52,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StudentProfile
-        fields = "__all__"
+        exclude = ["user"]
         read_only_fields = ["created_at", "updated_at"]
 
 
