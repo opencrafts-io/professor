@@ -1,6 +1,9 @@
 asgiref==3.11.0
 attrs==25.4.0
+boto3==1.42.34
+botocore==1.42.34
 Django==5.2.9
+django-storages==1.14.6
 django-stubs==5.2.8
 django-stubs-ext==5.2.8
 djangorestframework==3.16.1
@@ -10,6 +13,7 @@ frozenlist==1.8.0
 gunicorn==23.0.0
 idna==3.11
 iniconfig==2.3.0
+jmespath==1.1.0
 JSON-log-formatter==1.1.1
 multidict==6.7.0
 openpyxl==3.1.5
@@ -21,10 +25,14 @@ psycopg2-binary==2.9.11
 Pygments==2.19.2
 PyJWT==2.10.1
 pytest==8.4.2
+python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
+s3transfer==0.16.0
+six==1.17.0
 sqlparse==0.5.4
 types-PyYAML==6.0.12.20250915
 typing_extensions==4.15.0
+urllib3==2.6.3
 uv==0.9.14
 xlrd==2.0.2
 yarl==1.22.0
