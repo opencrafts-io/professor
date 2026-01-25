@@ -156,13 +156,9 @@ class StudentProfileDeleteView(DestroyAPIView):
 class StudentProfileDetailView(APIView):
     """
     Retrieve student profile for the authenticated user
-    GET /api/student-profile/me/
     """
 
     def get(self, request):
-        try:
-            profile = StudentProfile.objects.get(user=request.user)
-            serializer = StudentProfileSerializer(profile)
-            return Response(serializer.data)
-        except StudentProfile.DoesNotExist:
-            raise NotFound("Student profile not found for this user")
+        profiles = StudentProfile.objects.filter(user=request.user)
+        serializer = StudentProfileSerializer(profiles, many=True)
+        return Response(serializer.data)
