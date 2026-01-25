@@ -1,7 +1,6 @@
 import logging
 from rest_framework import status
 from rest_framework.authentication import BaseAuthentication
-from django.contrib.auth.models import AnonymousUser
 from rest_framework.exceptions import AuthenticationFailed
 
 from users.models import User

@@ -7,7 +7,7 @@ from rest_framework.generics import (
     RetrieveAPIView,
     UpdateAPIView,
 )
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import NotFound
 from rest_framework.views import APIView, PermissionDenied, Response
 from users.models import StudentProfile, User, Administrator
@@ -30,7 +30,6 @@ class AdministratorManagementView(ListCreateAPIView):
     Allows creating and listing administrators.
     """
 
-    permission_classes = [IsAuthenticated]
     serializer_class = AdministratorSerializer
     queryset = Administrator.objects.all()
 
@@ -59,7 +58,6 @@ class StudentProfileRetrieveView(RetrieveAPIView):
 
     serializer_class = StudentProfileSerializer
     queryset = StudentProfile.objects.all()
-    permission_classes = [IsAuthenticated]
     lookup_field = "pk"
 
     def get_object(self):
@@ -74,7 +72,6 @@ class StudentProfileListView(ListAPIView):
 
     serializer_class = StudentProfileSerializer
     queryset = StudentProfile.objects.all()
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = StudentProfile.objects.all()
@@ -102,7 +99,6 @@ class StudentProfileUpdateView(UpdateAPIView):
 
     serializer_class = StudentProfileSerializer
     queryset = StudentProfile.objects.all()
-    permission_classes = [IsAuthenticated]
     lookup_field = "pk"
 
     def get_object(self):
@@ -131,7 +127,6 @@ class StudentProfileDeleteView(DestroyAPIView):
 
     serializer_class = StudentProfileSerializer
     queryset = StudentProfile.objects.all()
-    permission_classes = [IsAuthenticated]
     lookup_field = "pk"
 
     def get_object(self):
@@ -161,15 +156,9 @@ class StudentProfileDeleteView(DestroyAPIView):
 class StudentProfileDetailView(APIView):
     """
     Retrieve student profile for the authenticated user
-    GET /api/student-profile/me/
     """
 
-    permission_classes = [IsAuthenticated]
-
     def get(self, request):
-        try:
-            profile = StudentProfile.objects.get(user=request.user)
-            serializer = StudentProfileSerializer(profile)
-            return Response(serializer.data)
-        except StudentProfile.DoesNotExist:
-            raise NotFound("Student profile not found for this user")
+        profiles = StudentProfile.objects.filter(user=request.user)
+        serializer = StudentProfileSerializer(profiles, many=True)
+        return Response(serializer.data)
