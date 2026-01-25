@@ -98,8 +98,8 @@ class StudentProfile(models.Model):
         choices=ACADEMIC_STATUS_CHOICES,
         default="unknown",
     )
-    enrollment_date = models.DateField(null=True, blank=True)
-    expected_graduation = models.DateField(null=True, blank=True)
+    enrollment_date = models.DateTimeField(null=True, blank=True)
+    expected_graduation = models.DateTimeField(null=True, blank=True)
 
     profile_picture = models.URLField(
         max_length=2048,
