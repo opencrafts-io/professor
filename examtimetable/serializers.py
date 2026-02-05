@@ -29,6 +29,54 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "semester_id",
         ]
 
+
+class ExamScheduleIngestItemSerializer(serializers.ModelSerializer):
+    """
+    Serializer for a single item in the ingestion request.
+    Strictly follows the contract fields.
+    """
+    raw_data = serializers.JSONField(required=False, default=dict)
+
+    class Meta:
+        model = ExamSchedule
+        fields = [
+            "course_code",
+            "course_name",
+            "exam_date",
+            "start_time",
+            "end_time",
+            "day",
+            "venue",
+            "campus",
+            "coordinator",
+            "hrs",
+            "invigilator",
+            "location",
+            "room",
+            "building",
+            "exam_type",
+            "instructions",
+            "raw_data",
+        ]
+        extra_kwargs = {
+            "course_code": {"required": True, "allow_blank": False},
+        }
+
+    def validate_course_code(self, value):
+        return value.strip()
+
+
+class ExamScheduleIngestRequestSerializer(serializers.Serializer):
+    """
+    Top-level serializer for the ingestion request.
+    """
+    institution_id = serializers.CharField(max_length=100, required=True, allow_blank=False)
+    semester_id = serializers.IntegerField(required=False, allow_null=True)
+    items = ExamScheduleIngestItemSerializer(many=True, required=True)
+
+    def validate_institution_id(self, value):
+        return value.strip()
+
     # currently only handles daystar exams will change to handle KCA
     # this functionality should be moved to the parsers
     def get_datetime_str(self, instance):

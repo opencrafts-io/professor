@@ -1,4 +1,5 @@
 from users.models import StudentProfile
+from institutions.models import Institution
 from django.db import models
 
 
@@ -33,6 +34,8 @@ class Course(models.Model):
     raw_data = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='courses', null=True, blank=True)
 
     def __str__(self):
         return f"{self.course_code} - {self.course_name}"
