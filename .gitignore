@@ -219,7 +219,7 @@ __marimo__/
 
 # folder which timetables are uploaded for tests
 uploads/
-
+docs/
 # ignore the .json files from the tests running
 *.json
 
