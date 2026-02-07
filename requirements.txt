@@ -1,6 +1,6 @@
 asgiref==3.11.0
 attrs==25.4.0
-Django==5.2.9
+Django==5.2.11
 django-stubs==5.2.8
 django-stubs-ext==5.2.8
 djangorestframework==3.16.1
