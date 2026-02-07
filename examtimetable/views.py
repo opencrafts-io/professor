@@ -244,6 +244,29 @@ class IngestExamScheduleView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        try:
+            from event_bus import publisher
+            import json
+
+            # Identify unique course codes that were updated
+            touched_courses = list(set([item["course_code"] for i, item in deduplicated_items.values()]))
+
+            message = {
+                "institution_id": institution_id,
+                "semester_id": semester_id,
+                "course_codes": touched_courses,
+                "timestamp": str(datetime.now())
+            }
+
+            publisher.publish(
+                exchange="professor.events",
+                queue_name="batch.exam_schedule.ingested",
+                message=json.dumps(message)
+            )
+        except Exception as e:
+            # Log error but don't fail
+            logger.error(f"Failed to publish event: {e}")
+
         return Response(
             {
                 "created": created_count,

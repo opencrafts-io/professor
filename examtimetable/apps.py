@@ -4,3 +4,6 @@ from django.apps import AppConfig
 class ExamtimetableConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'examtimetable'
+
+    def ready(self) -> None:
+        import examtimetable.consumers
