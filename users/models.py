@@ -1,5 +1,8 @@
 import uuid
+
 from django.db import models
+
+from institutions.models import Institution
 
 
 class User(models.Model):
@@ -34,11 +37,48 @@ class User(models.Model):
 
 
 class StudentProfile(models.Model):
+
+    GENDER_CHOICES = (
+        ("male", "Male"),
+        ("female", "Female"),
+        ("non_binary", "Non-binary"),
+        ("genderqueer", "Genderqueer"),
+        ("genderfluid", "Gender fluid"),
+        ("agender", "Agender"),
+        ("transgender_male", "Transgender male"),
+        ("transgender_female", "Transgender female"),
+        ("intersex", "Intersex"),
+        ("two_spirit", "Two-spirit"),
+        ("prefer_not_to_say", "Prefer not to say"),
+        ("other", "Other"),
+        ("unknown", "Unknown"),
+    )
+
+    ACADEMIC_STATUS_CHOICES = (
+        ("active", "Active"),
+        ("suspended", "Suspended"),
+        ("completed", "Completed"),
+        ("inactive", "Inactive"),
+        ("unknown", "Unknown"),
+    )
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name="student_profile"
     )
     student_id = models.CharField(max_length=100, unique=True)
+    student_name = models.CharField(
+        max_length=255,
+        default="",
+        blank=True,
+    )
+    institution = models.ForeignKey(
+        Institution, on_delete=models.SET_NULL, null=True, blank=True
+    )
 
+    gender = models.CharField(
+        max_length=32,
+        choices=GENDER_CHOICES,
+        default="unknown",
+    )
     national_id = models.CharField(max_length=100, null=True, blank=True)
     nationality = models.CharField(max_length=100, null=True, blank=True)
 
@@ -52,11 +92,22 @@ class StudentProfile(models.Model):
 
     phone = models.CharField(max_length=50, null=True, blank=True)
     address = models.TextField(null=True, blank=True)
+    email = models.EmailField(max_length=255, null=True, blank=True)
+    status = models.CharField(
+        max_length=32,
+        choices=ACADEMIC_STATUS_CHOICES,
+        default="unknown",
+    )
+    enrollment_date = models.DateTimeField(null=True, blank=True)
+    expected_graduation = models.DateTimeField(null=True, blank=True)
 
-    enrollment_date = models.DateField(null=True, blank=True)
-    expected_graduation = models.DateField(null=True, blank=True)
+    profile_picture = models.URLField(
+        max_length=2048,
+        blank=True,
+        null=True,
+    )
 
-    raw_data = models.JSONField(default=dict, blank=True)
+    raw_data = models.JSONField(default=dict, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
