@@ -9,14 +9,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from users.models import StudentProfile
 
-from .helpers import (
-    kca_extractor,
-    nursing_exam_timetable_parser,
-    parse_school_exam_timetable,
-    strath_extractor,
-)
 from .models import ExamSchedule
-from .serializers import ExamScheduleSerializer
+from .serializers import (
+    ExamScheduleSerializer,
+    ExamScheduleIngestRequestSerializer,
+    ExamScheduleIngestItemSerializer
+)
 
 
 class StudentExamScheduleView(APIView):
@@ -62,205 +60,6 @@ class StudentExamScheduleView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class ParseExamTimetableView(APIView):
-    """
-    Parse and upload exam timetable from Excel file.
-    POST: file (Excel file), file_name (parser type: 'school_exams', 'nursing_exams', 'strath', 'kca')
-    """
-
-    def post(self, request):
-        file = request.FILES.get("file")
-        file_name = request.data.get("file_name")
-        semester_id = request.data.get("semester_id")
-        institution_id = request.data.get("institution_id")
-
-        if not file:
-            return Response(
-                {"error": "file is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if not file_name:
-            return Response(
-                {
-                    "error": "file_name is required. Options: 'school_exams', 'nursing_exams', 'strath', 'kca'"
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        semester = None
-        if semester_id:
-            try:
-                semester = SemesterInfo.objects.get(id=semester_id)
-            except SemesterInfo.DoesNotExist:
-                return Response(
-                    {"error": "Semester not found"}, status=status.HTTP_404_NOT_FOUND
-                )
-
-        try:
-            if file_name == "school_exams":
-                courses = parse_school_exam_timetable(file)
-            elif file_name == "nursing_exams":
-                courses = nursing_exam_timetable_parser(file)
-            elif file_name == "strath":
-                courses = strath_extractor(file)
-            elif file_name == "kca":
-                courses = kca_extractor(file)
-            else:
-                return Response(
-                    {
-                        "error": f"Unknown file_name: {file_name}. Options: 'school_exams', 'nursing_exams', 'strath', 'kca'"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        except Exception as e:
-            return Response(
-                {"error": f"Error parsing file: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        created_count = 0
-        updated_count = 0
-
-        with transaction.atomic():
-            for course_data in courses:
-                course_code = course_data.get("course_code", "").strip()
-                if not course_code:
-                    continue
-
-                if len(course_code) > 50:
-                    continue
-
-                invalid_keywords = [
-                    "UNIVERSITY",
-                    "BACHELOR",
-                    "SCHOOL",
-                    "INSTITUTE",
-                    "DEPARTMENT",
-                    "FACULTY",
-                    "COLLEGE",
-                    "PROGRAMME",
-                    "PROGRAM",
-                ]
-                if any(keyword in course_code.upper() for keyword in invalid_keywords):
-                    continue
-
-                course_name = course_data.get("course_name", course_code)
-                if course_name and len(course_name) > 255:
-                    course_name = course_name[:255]
-
-                exam_date = None
-                start_time = None
-                end_time = None
-
-                if course_data.get("day"):
-                    day_str = course_data["day"]
-                    if " " in day_str:
-                        try:
-                            date_part = day_str.split(" ", 1)[1]
-                            exam_date = datetime.strptime(date_part, "%d/%m/%y").date()
-                        except (ValueError, IndexError):
-                            pass
-
-                if course_data.get("time"):
-                    time_str = course_data["time"]
-                    if "-" in time_str:
-                        try:
-                            start_str, end_str = time_str.split("-", 1)
-                            start_str = start_str.strip()
-                            end_str = end_str.strip()
-
-                            formats = ["%I:%M%p", "%H:%M", "%I:%M %p", "%H:%M "]
-                            start_time = None
-                            end_time = None
-
-                            for fmt in formats:
-                                try:
-                                    start_time = datetime.strptime(
-                                        start_str, fmt
-                                    ).time()
-                                    break
-                                except ValueError:
-                                    continue
-
-                            for fmt in formats:
-                                try:
-                                    end_time = datetime.strptime(end_str, fmt).time()
-                                    break
-                                except ValueError:
-                                    continue
-                        except (ValueError, IndexError):
-                            pass
-
-                exam_data = {
-                    "course_code": course_code,
-                    "course_name": course_name if course_name else course_code,
-                    "day": course_data.get("day", ""),
-                    "venue": course_data.get("venue", ""),
-                    "campus": course_data.get("campus", ""),
-                    "coordinator": course_data.get("coordinator", ""),
-                    "hrs": course_data.get("hrs", ""),
-                    "invigilator": course_data.get("invigilator", ""),
-                    "location": course_data.get(
-                        "venue", course_data.get("location", "")
-                    ),
-                    "raw_data": course_data,
-                }
-
-                if exam_date:
-                    exam_data["exam_date"] = exam_date
-                if start_time:
-                    exam_data["start_time"] = start_time
-                if end_time:
-                    exam_data["end_time"] = end_time
-
-                if semester:
-                    exam_data["semester_id"] = semester.pk
-                if institution_id:
-                    exam_data["institution_id"] = institution_id
-
-                serializer = ExamScheduleSerializer(data=exam_data)
-                if serializer.is_valid():
-                    lookup = {
-                        "course_code": course_code,
-                        "semester": semester if semester else None,
-                    }
-                    if institution_id:
-                        lookup["institution_id"] = institution_id
-
-                    exam_schedule, created = ExamSchedule.objects.update_or_create(
-                        **lookup,
-                        defaults=serializer.validated_data,
-                    )
-                    if created:
-                        created_count += 1
-                    else:
-                        updated_count += 1
-                else:
-                    # duplicate course, we handle by deleting duplicate courses
-                    if serializer.errors.get('course_code')[0] == \
-                        "exam schedule with this course code already exists.":
-                        dup_course = ExamSchedule.objects.get(
-                            course_code=course_code,
-                        )
-                        dup_course.delete()
-                        continue
-                    return Response(
-                        {
-                            "error": f"Validation error for course {course_code}: {serializer.errors}"
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-        return Response(
-            {
-                "message": "Successfully parsed and saved exam timetable",
-                "created": created_count,
-                "updated": updated_count,
-            },
-            status=status.HTTP_200_OK,
-        )
-
-
 class ExamScheduleListView(ListAPIView):
     """
     List all exam schedules (paginated).
@@ -302,8 +101,8 @@ class ExamScheduleByCourseCodesView(APIView):
                 {"error": "course_codes must be a non-empty list"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        exams_info = [] # will hold the Data to return 
+
+        exams_info = [] # will hold the Data to return
 
         for course_code in course_codes:
             # removing optional spaces to the search query to match spaces between searches
@@ -345,3 +144,135 @@ class ExamScheduleByInstitutionView(APIView):
 
         serializer = ExamScheduleSerializer(exams, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class IngestExamScheduleView(APIView):
+    """
+    Ingest exam schedules from JSON payload.
+    POST: institution_id (required), semester_id (optional), items (required array)
+    """
+
+    def post(self, request):
+        serializer = ExamScheduleIngestRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {
+                    "error": "validation_failed",
+                    "errors": [
+                        {
+                            "code": "invalid_request",
+                            "message": "The request payload is invalid.",
+                            "field_errors": serializer.errors
+                        }
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        data = serializer.validated_data
+        institution_id = data["institution_id"]
+        semester_id = data.get("semester_id")
+        items_data = data["items"]
+
+        # 1. Deduplicate within request (last-wins)
+        deduplicated_items = {}
+        skipped_count = 0
+        for i, item_data in enumerate(items_data):
+            course_code = item_data["course_code"]
+            key = (institution_id, semester_id, course_code)
+            if key in deduplicated_items:
+                skipped_count += 1
+            deduplicated_items[key] = (i, item_data)
+
+        created_count = 0
+        updated_count = 0
+        errors = []
+
+        # 2. Process items atomically
+        try:
+            with transaction.atomic():
+                for key, (original_index, item_data) in deduplicated_items.items():
+                    course_code = item_data["course_code"]
+
+                    lookup = {
+                        "course_code": course_code,
+                        "institution_id": institution_id,
+                        "semester_id": semester_id,
+                    }
+
+                    try:
+                        obj, created = ExamSchedule.objects.update_or_create(
+                            **lookup,
+                            defaults=item_data
+                        )
+                        if created:
+                            created_count += 1
+                        else:
+                            updated_count += 1
+                    except Exception as e:
+                        errors.append({
+                            "code": "server_error",
+                            "message": str(e),
+                            "item_index": original_index,
+                            "key": {
+                                "institution_id": institution_id,
+                                "semester_id": semester_id,
+                                "course_code": course_code
+                            }
+                        })
+                        raise e # Rollback
+        except Exception as e:
+            # If we didn't populate errors yet, it might be a DB constraint or something else
+            if not errors:
+                return Response(
+                    {
+                        "error": "ingestion_failed",
+                        "errors": [
+                            {
+                                "code": "server_error",
+                                "message": str(e)
+                            }
+                        ]
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            return Response(
+                {
+                    "error": "ingestion_failed",
+                    "errors": errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            from event_bus import publisher
+            import json
+
+            # Identify unique course codes that were updated
+            touched_courses = list(set([item["course_code"] for i, item in deduplicated_items.values()]))
+
+            message = {
+                "institution_id": institution_id,
+                "semester_id": semester_id,
+                "course_codes": touched_courses,
+                "timestamp": str(datetime.now())
+            }
+
+            publisher.publish(
+                exchange="professor.events",
+                queue_name="batch.exam_schedule.ingested",
+                message=json.dumps(message)
+            )
+        except Exception as e:
+            # Log error but don't fail
+            logger.error(f"Failed to publish event: {e}")
+
+        return Response(
+            {
+                "created": created_count,
+                "updated": updated_count,
+                "skipped": skipped_count,
+                "errors": []
+            },
+            status=status.HTTP_200_OK
+        )

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import SemesterInfo, Course, Grade, ScheduleEntry, Transcript, StudentCourseEnrollment
+from institutions.models import Institution
 from users.models import StudentProfile
 
 class SemesterInfoSerializer(serializers.ModelSerializer):
@@ -15,7 +16,7 @@ class CourseSerializer(serializers.ModelSerializer):
   class Meta:
     model = Course
     fields = '__all__'
-    read_only_fields = ['created_at', 'updated_at', 'semester']
+    read_only_fields = ['created_at', 'updated_at', 'semester', 'institution']
 
   def create(self, validated_data):
     semester_id = validated_data.pop('semester_id', None)
@@ -138,3 +139,22 @@ class StudentCourseEnrollmentSerializer(serializers.ModelSerializer):
       validated_data['semester'] = SemesterInfo.objects.get(id=semester_id)
 
     return super().update(instance, validated_data)
+
+class CourseRegistrationSerializer(serializers.Serializer):
+    course_code = serializers.CharField(max_length=50)
+    course_name = serializers.CharField(max_length=255)
+    semester = serializers.CharField(max_length=50)
+    institution = serializers.IntegerField()
+
+    # Optional fields
+    course_id = serializers.CharField(required=False, allow_null=True)
+    instructor = serializers.CharField(required=False, allow_null=True)
+    credits = serializers.FloatField(required=False, allow_null=True)
+    department = serializers.CharField(required=False, allow_null=True)
+
+    # Schedule info
+    meeting_times = serializers.JSONField(required=False, default=dict)
+    campus = serializers.CharField(required=False, allow_null=True)
+
+    # Enrollment
+    student_id = serializers.CharField(required=True)
