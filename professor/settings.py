@@ -185,8 +185,78 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", None)
+assert AWS_ACCESS_KEY_ID is not None, "AWS_ACCESS_KEY_ID was not set in .env!"
+
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", None)
+assert AWS_ACCESS_KEY_ID is not None, "AWS_SECRET_ACCESS_KEY was not set in .env!"
+
+AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", None)
+assert AWS_ACCESS_KEY_ID is not None, "AWS_STORAGE_BUCKET_NAME was not set in .env!"
+
+AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", None)
+assert AWS_S3_REGION_NAME is not None, "AWS_S3_REGION_NAME was not set in .env!"
+
+AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com"
+
+
+# For serving static files directly from S3
+AWS_S3_URL_PROTOCOL = "https:"
+AWS_S3_USE_SSL = True
+AWS_S3_VERIFY = True
 
 STATIC_URL = "static/"
+MEDIA_URL = "/media/"
+
+ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
+
+STORAGE_LOCATION = "professor-media"
+
+if ENVIRONMENT == "prod":
+    STORAGE_LOCATION = "professor-media"
+elif ENVIRONMENT == "staging":
+    STORAGE_LOCATION = "qa-professor-media"
+else:
+    STORAGE_LOCATION = "dev-professor-media"
+
+print(AWS_S3_CUSTOM_DOMAIN)
+
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "location": STORAGE_LOCATION,
+            "querystring_auth": False,
+            "default_acl": None,
+            "custom_domain": AWS_S3_CUSTOM_DOMAIN,
+            "url_protocol": "https:",
+            "signature_version": "s3v4",
+            "querystring_expire": 3600,
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "location": "static",
+            "querystring_auth": False,
+            "default_acl": None,
+            "signature_version": "s3v4",
+            "querystring_expire": 3600,
+            "custom_domain": AWS_S3_CUSTOM_DOMAIN,
+            "url_protocol": AWS_S3_URL_PROTOCOL,
+        },
+    },
+}
+
+
+# File upload settings for large images
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
+
+# HTTPS Configuration
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_TLS = os.environ.get("USE_TLS", "False").lower() == "true"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
