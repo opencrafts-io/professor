@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 from django.utils import timezone
 from rest_framework import serializers
 from courses.models import SemesterInfo
@@ -28,6 +28,38 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "datetime_str",
             "semester_id",
         ]
+
+    # currently only handles daystar exams
+    # this functionality should be moved to the parsers
+    def get_datetime_str(self, instance):
+        """
+        returns Iso format in UTC
+        """
+        if not instance.day or not instance.start_time:
+            return None
+
+        try:
+            pattern = r"^\d{2}/\d{2}/\d{4}$"
+            parts = instance.day.split()
+            if len(parts) > 1:
+                crs_date = parts[1]
+            else:
+                crs_date = parts[0]
+
+            date_str = crs_date + " " + str(instance.start_time)
+            if re.match(pattern, crs_date):
+                naive_dt = datetime.strptime(date_str, "%d/%m/%Y %H:%M:%S")
+            else:
+                naive_dt = datetime.strptime(date_str, "%d/%m/%y %H:%M:%S")
+
+            aware_dt = naive_dt.replace(tzinfo=ZoneInfo("Africa/Nairobi"))
+            utc_dt = aware_dt.astimezone(dt_timezone.utc)
+
+            return utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return None
 
 
 class ExamScheduleIngestItemSerializer(serializers.ModelSerializer):
@@ -76,24 +108,6 @@ class ExamScheduleIngestRequestSerializer(serializers.Serializer):
 
     def validate_institution_id(self, value):
         return value.strip()
-
-    # currently only handles daystar exams will change to handle KCA
-    # this functionality should be moved to the parsers
-    def get_datetime_str(self, instance):
-        """
-        returns Iso format
-        """
-        pattern = r"^\d{2}/\d{2}/\d{4}$"
-        crs_date = instance.day.split()[1]
-        date_str = crs_date + " " + str(instance.start_time)
-        if re.match(pattern, crs_date):
-            naive_dt = datetime.strptime(date_str, "%d/%m/%Y %H:%M:%S")
-        else:
-            naive_dt = datetime.strptime(date_str, "%d/%m/%y %H:%M:%S")
-
-        aware_dt = naive_dt.replace(tzinfo=ZoneInfo("Africa/Nairobi"))
-
-        return aware_dt.isoformat()
 
     def create(self, validated_data):
         semester_id = validated_data.pop("semester_id", None)
