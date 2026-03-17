@@ -26,7 +26,6 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "hrs",
             "invigilator",
             "datetime_str",
-            "semester_id",
         ]
 
     # currently only handles daystar exams
