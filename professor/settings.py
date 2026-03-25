@@ -102,7 +102,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 30,
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "professor.verisafe_jwt_authentication.VerisafeJWTAuthentication",
+        # "professor.verisafe_jwt_authentication.VerisafeJWTAuthentication",
     ],
 }
 

@@ -1,19 +1,21 @@
 from datetime import datetime
-from django.db.models import QuerySet
-from courses.models import SemesterInfo, StudentCourseEnrollment
+
 from django.db import transaction
-from professor.pagination import ResultsSetPagination
+from django.db.models import QuerySet
 from rest_framework import status
 from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from courses.models import SemesterInfo, StudentCourseEnrollment
+from professor.pagination import ResultsSetPagination
 from users.models import StudentProfile
 
 from .models import ExamSchedule
 from .serializers import (
-    ExamScheduleSerializer,
+    ExamScheduleIngestItemSerializer,
     ExamScheduleIngestRequestSerializer,
-    ExamScheduleIngestItemSerializer
+    ExamScheduleSerializer,
 )
 
 
@@ -81,6 +83,7 @@ class ExamScheduleListView(ListAPIView):
 
         return queryset
 
+
 class ExamScheduleByCourseCodesView(APIView):
     """
     Get exam schedules for a list of course codes.
@@ -102,7 +105,7 @@ class ExamScheduleByCourseCodesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        exams_info = [] # will hold the Data to return
+        exams_info = []  # will hold the Data to return
 
         for course_code in course_codes:
             # removing optional spaces to the search query to match spaces between searches
@@ -113,7 +116,7 @@ class ExamScheduleByCourseCodesView(APIView):
 
             mod_course_code = "".join(f"{char}\s*" for char in course_code)
             for exam_info in ExamSchedule.objects.filter(
-                course_code__iregex = f".*{mod_course_code}.*",
+                course_code__iregex=f".*{mod_course_code}.*",
             ).all():
                 exams_info.append(exam_info)
 
@@ -162,11 +165,11 @@ class IngestExamScheduleView(APIView):
                         {
                             "code": "invalid_request",
                             "message": "The request payload is invalid.",
-                            "field_errors": serializer.errors
+                            "field_errors": serializer.errors,
                         }
-                    ]
+                    ],
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         data = serializer.validated_data
@@ -202,66 +205,62 @@ class IngestExamScheduleView(APIView):
 
                     try:
                         obj, created = ExamSchedule.objects.update_or_create(
-                            **lookup,
-                            defaults=item_data
+                            **lookup, defaults=item_data
                         )
                         if created:
                             created_count += 1
                         else:
                             updated_count += 1
                     except Exception as e:
-                        errors.append({
-                            "code": "server_error",
-                            "message": str(e),
-                            "item_index": original_index,
-                            "key": {
-                                "institution_id": institution_id,
-                                "semester_id": semester_id,
-                                "course_code": course_code
+                        errors.append(
+                            {
+                                "code": "server_error",
+                                "message": str(e),
+                                "item_index": original_index,
+                                "key": {
+                                    "institution_id": institution_id,
+                                    "semester_id": semester_id,
+                                    "course_code": course_code,
+                                },
                             }
-                        })
-                        raise e # Rollback
+                        )
+                        raise e  # Rollback
         except Exception as e:
             # If we didn't populate errors yet, it might be a DB constraint or something else
             if not errors:
                 return Response(
                     {
                         "error": "ingestion_failed",
-                        "errors": [
-                            {
-                                "code": "server_error",
-                                "message": str(e)
-                            }
-                        ]
+                        "errors": [{"code": "server_error", "message": str(e)}],
                     },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
             return Response(
-                {
-                    "error": "ingestion_failed",
-                    "errors": errors
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "ingestion_failed", "errors": errors},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            from event_bus import publisher
             import json
 
+            from event_bus import publisher
+
             # Identify unique course codes that were updated
-            touched_courses = list(set([item["course_code"] for i, item in deduplicated_items.values()]))
+            touched_courses = list(
+                set([item["course_code"] for i, item in deduplicated_items.values()])
+            )
 
             message = {
                 "institution_id": institution_id,
                 "semester_id": semester_id,
                 "course_codes": touched_courses,
-                "timestamp": str(datetime.now())
+                "timestamp": str(datetime.now()),
             }
 
             publisher.publish(
                 exchange="professor.events",
                 queue_name="batch.exam_schedule.ingested",
-                message=json.dumps(message)
+                message=json.dumps(message),
             )
         except Exception as e:
             # Log error but don't fail
@@ -272,7 +271,7 @@ class IngestExamScheduleView(APIView):
                 "created": created_count,
                 "updated": updated_count,
                 "skipped": skipped_count,
-                "errors": []
+                "errors": [],
             },
-            status=status.HTTP_200_OK
+            status=status.HTTP_200_OK,
         )
