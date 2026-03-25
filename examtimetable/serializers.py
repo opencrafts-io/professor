@@ -9,9 +9,7 @@ from .models import ExamSchedule
 
 
 class ExamScheduleSerializer(serializers.ModelSerializer):
-    semester_id = serializers.IntegerField(write_only=True, required=False)
     # time = serializers.SerializerMethodField()
-    datetime_str = serializers.SerializerMethodField()
 
     class Meta:
         model = ExamSchedule
@@ -27,38 +25,6 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "invigilator",
             "datetime_str",
         ]
-
-    # currently only handles daystar exams
-    # this functionality should be moved to the parsers
-    def get_datetime_str(self, instance):
-        """
-        returns Iso format in UTC
-        """
-        if not instance.day or not instance.start_time:
-            return None
-
-        try:
-            pattern = r"^\d{2}/\d{2}/\d{4}$"
-            parts = instance.day.split()
-            if len(parts) > 1:
-                crs_date = parts[1]
-            else:
-                crs_date = parts[0]
-
-            date_str = crs_date + " " + str(instance.start_time)
-            if re.match(pattern, crs_date):
-                naive_dt = datetime.strptime(date_str, "%d/%m/%Y %H:%M:%S")
-            else:
-                naive_dt = datetime.strptime(date_str, "%d/%m/%y %H:%M:%S")
-
-            aware_dt = naive_dt.replace(tzinfo=ZoneInfo("Africa/Nairobi"))
-            utc_dt = aware_dt.astimezone(dt_timezone.utc)
-
-            return utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return None
 
 
 class ExamScheduleIngestItemSerializer(serializers.ModelSerializer):
@@ -87,6 +53,7 @@ class ExamScheduleIngestItemSerializer(serializers.ModelSerializer):
             "building",
             "exam_type",
             "instructions",
+            "datetime_str",
             "raw_data",
         ]
         extra_kwargs = {
