@@ -63,6 +63,19 @@ class ExamScheduleIngestItemSerializer(serializers.ModelSerializer):
     def validate_course_code(self, value):
         return value.strip()
 
+    def to_internal_value(self, data):
+        for field in ['start_time', 'end_time']:
+            if field in data and isinstance(data[field], str):
+                time_str = data[field].replace('.', ':').strip()
+                try:
+                    # Handle 8:00AM, 08:00 AM, 3:00PM, etc.
+                    time_str = time_str.upper().replace(" ", "")
+                    parsed_time = datetime.strptime(time_str, "%I:%M%p").time()
+                    data[field] = parsed_time.isoformat()
+                except ValueError:
+                    pass
+        return super().to_internal_value(data)
+
 
 class ExamScheduleIngestRequestSerializer(serializers.Serializer):
     """
