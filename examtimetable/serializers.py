@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
 from django.utils import timezone
 from rest_framework import serializers
 from courses.models import SemesterInfo
@@ -9,9 +9,7 @@ from .models import ExamSchedule
 
 
 class ExamScheduleSerializer(serializers.ModelSerializer):
-    semester_id = serializers.IntegerField(write_only=True, required=False)
     # time = serializers.SerializerMethodField()
-    datetime_str = serializers.SerializerMethodField()
 
     class Meta:
         model = ExamSchedule
@@ -26,7 +24,6 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "hrs",
             "invigilator",
             "datetime_str",
-            "semester_id",
         ]
 
 
@@ -56,6 +53,7 @@ class ExamScheduleIngestItemSerializer(serializers.ModelSerializer):
             "building",
             "exam_type",
             "instructions",
+            "datetime_str",
             "raw_data",
         ]
         extra_kwargs = {
@@ -64,6 +62,19 @@ class ExamScheduleIngestItemSerializer(serializers.ModelSerializer):
 
     def validate_course_code(self, value):
         return value.strip()
+
+    def to_internal_value(self, data):
+        for field in ['start_time', 'end_time']:
+            if field in data and isinstance(data[field], str):
+                time_str = data[field].replace('.', ':').strip()
+                try:
+                    # Handle 8:00AM, 08:00 AM, 3:00PM, etc.
+                    time_str = time_str.upper().replace(" ", "")
+                    parsed_time = datetime.strptime(time_str, "%I:%M%p").time()
+                    data[field] = parsed_time.isoformat()
+                except ValueError:
+                    pass
+        return super().to_internal_value(data)
 
 
 class ExamScheduleIngestRequestSerializer(serializers.Serializer):
@@ -76,24 +87,6 @@ class ExamScheduleIngestRequestSerializer(serializers.Serializer):
 
     def validate_institution_id(self, value):
         return value.strip()
-
-    # currently only handles daystar exams will change to handle KCA
-    # this functionality should be moved to the parsers
-    def get_datetime_str(self, instance):
-        """
-        returns Iso format
-        """
-        pattern = r"^\d{2}/\d{2}/\d{4}$"
-        crs_date = instance.day.split()[1]
-        date_str = crs_date + " " + str(instance.start_time)
-        if re.match(pattern, crs_date):
-            naive_dt = datetime.strptime(date_str, "%d/%m/%Y %H:%M:%S")
-        else:
-            naive_dt = datetime.strptime(date_str, "%d/%m/%y %H:%M:%S")
-
-        aware_dt = naive_dt.replace(tzinfo=ZoneInfo("Africa/Nairobi"))
-
-        return aware_dt.isoformat()
 
     def create(self, validated_data):
         semester_id = validated_data.pop("semester_id", None)
