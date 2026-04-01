@@ -43,5 +43,4 @@ class VerisafeJWTAuthentication(BaseAuthentication):
             request.verisafe_claims = payload
             return (user, token)
         except Exception as e:
-            # raise AuthenticationFailed(str(e))
-            return None
+            raise AuthenticationFailed(str(e))
