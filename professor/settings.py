@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
-import os
+
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -102,7 +102,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 30,
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        # "professor.verisafe_jwt_authentication.VerisafeJWTAuthentication",
+        "professor.verisafe_jwt_authentication.VerisafeJWTAuthentication",
     ],
 }
 
