@@ -13,7 +13,7 @@ logger = logging.getLogger("django")
 
 class VerisafeJWTAuthentication(BaseAuthentication):
     def authenticate(self, request):
-        if request.path == "/ping" or request.path == "/examtimetable/ingest/":
+        if request.path == "/ping" or request.path == "/api/exams/ingest/":
             return None
 
         auth_header = request.headers.get("Authorization", "")
