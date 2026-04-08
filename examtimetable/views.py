@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
 
 from courses.models import SemesterInfo, StudentCourseEnrollment
 from professor.pagination import ResultsSetPagination
@@ -154,7 +155,7 @@ class IngestExamScheduleView(APIView):
     Ingest exam schedules from JSON payload.
     POST: institution_id (required), semester_id (optional), items (required array)
     """
-
+    permission_classes = [AllowAny]
     def post(self, request):
         serializer = ExamScheduleIngestRequestSerializer(data=request.data)
         if not serializer.is_valid():
@@ -177,7 +178,7 @@ class IngestExamScheduleView(APIView):
         semester_id = data.get("semester_id")
         items_data = data["items"]
 
-        # 1. Deduplicate within request (last-wins)
+        # 1. Deduplicate
         deduplicated_items = {}
         skipped_count = 0
         for i, item_data in enumerate(items_data):
@@ -226,7 +227,6 @@ class IngestExamScheduleView(APIView):
                         )
                         raise e  # Rollback
         except Exception as e:
-            # If we didn't populate errors yet, it might be a DB constraint or something else
             if not errors:
                 return Response(
                     {
