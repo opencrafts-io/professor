@@ -27,7 +27,12 @@ class VerisafeJWTAuthentication(BaseAuthentication):
         try:
             payload = verify_verisafe_jwt(token)
             request.verisafe_claims = payload
-            request.user_id = payload["sub"]
+            user_id = payload.get("sub")
+            if not user_id:
+                raise AuthenticationFailed(
+                    "Token missing required 'sub' claim", code="invalid_token"
+                )
+            request.user_id = user_id
             user = User.objects.filter(user_id=request.user_id).first()
 
             if not user:
