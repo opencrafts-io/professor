@@ -36,10 +36,13 @@ class ExamSchedule(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['course_code', 'institution_id', 'semester'],
-                name='unique_exam_schedule',
-                nulls_distinct=False
+                fields=["course_code", "institution_id", "semester"],
+                name="unique_exam_schedule",
+                nulls_distinct=False,
             )
+        ]
+        indexes = [
+            models.Index(fields=["institution_id", "semester", "course_code"]),
         ]
 
     def __str__(self):

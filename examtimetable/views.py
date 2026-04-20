@@ -1,15 +1,15 @@
 from datetime import datetime
-
-from django.db import transaction
-from django.db.models import QuerySet
-from rest_framework import status
-from rest_framework.generics import ListAPIView
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from django.utils import timezone
 
 from courses.models import SemesterInfo, StudentCourseEnrollment
+from django.db import transaction
+from django.db.models import QuerySet
 from professor.pagination import ResultsSetPagination
+from rest_framework import status
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from users.models import StudentProfile
 
 from .models import ExamSchedule
@@ -155,7 +155,9 @@ class IngestExamScheduleView(APIView):
     Ingest exam schedules from JSON payload.
     POST: institution_id (required), semester_id (optional), items (required array)
     """
+
     permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = ExamScheduleIngestRequestSerializer(data=request.data)
         if not serializer.is_valid():
@@ -192,52 +194,85 @@ class IngestExamScheduleView(APIView):
         updated_count = 0
         errors = []
 
-        # 2. Process items atomically
+        # 2. Process items in bulk
         try:
+            course_codes = [
+                item_data["course_code"] for _, item_data in deduplicated_items.values()
+            ]
+
+            # Fetch existing records to separate create vs update
+            existing_exams = ExamSchedule.objects.filter(
+                institution_id=institution_id,
+                semester_id=semester_id,
+                course_code__in=course_codes,
+            )
+            existing_map = {exam.course_code: exam for exam in existing_exams}
+
+            items_to_create = []
+            items_to_update = []
+            now = timezone.now()
+
+            for key, (original_index, item_data) in deduplicated_items.items():
+                course_code = item_data["course_code"]
+
+                if course_code in existing_map:
+                    obj = existing_map[course_code]
+                    for field, value in item_data.items():
+                        setattr(obj, field, value)
+                    obj.updated_at = now
+                    items_to_update.append(obj)
+                else:
+                    items_to_create.append(
+                        ExamSchedule(
+                            institution_id=institution_id,
+                            semester_id=semester_id,
+                            **item_data,
+                        )
+                    )
+
             with transaction.atomic():
-                for key, (original_index, item_data) in deduplicated_items.items():
-                    course_code = item_data["course_code"]
+                if items_to_create:
+                    ExamSchedule.objects.bulk_create(items_to_create, batch_size=100)
+                    created_count = len(items_to_create)
 
-                    lookup = {
-                        "course_code": course_code,
-                        "institution_id": institution_id,
-                        "semester_id": semester_id,
-                    }
+                if items_to_update:
+                    fields_to_update = [
+                        "course_name",
+                        "exam_date",
+                        "start_time",
+                        "end_time",
+                        "day",
+                        "venue",
+                        "campus",
+                        "coordinator",
+                        "hrs",
+                        "invigilator",
+                        "location",
+                        "room",
+                        "building",
+                        "exam_type",
+                        "instructions",
+                        "datetime_str",
+                        "raw_data",
+                        "updated_at",
+                    ]
+                    ExamSchedule.objects.bulk_update(
+                        items_to_update, fields_to_update, batch_size=100
+                    )
+                    updated_count = len(items_to_update)
 
-                    try:
-                        obj, created = ExamSchedule.objects.update_or_create(
-                            **lookup, defaults=item_data
-                        )
-                        if created:
-                            created_count += 1
-                        else:
-                            updated_count += 1
-                    except Exception as e:
-                        errors.append(
-                            {
-                                "code": "server_error",
-                                "message": str(e),
-                                "item_index": original_index,
-                                "key": {
-                                    "institution_id": institution_id,
-                                    "semester_id": semester_id,
-                                    "course_code": course_code,
-                                },
-                            }
-                        )
-                        raise e  # Rollback
         except Exception as e:
-            if not errors:
-                return Response(
-                    {
-                        "error": "ingestion_failed",
-                        "errors": [{"code": "server_error", "message": str(e)}],
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
             return Response(
-                {"error": "ingestion_failed", "errors": errors},
-                status=status.HTTP_400_BAD_REQUEST,
+                {
+                    "error": "ingestion_failed",
+                    "errors": [
+                        {
+                            "code": "server_error",
+                            "message": str(e),
+                        }
+                    ],
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         try:
