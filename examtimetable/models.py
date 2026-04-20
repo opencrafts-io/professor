@@ -27,6 +27,7 @@ class ExamSchedule(models.Model):
     instructions = models.TextField(null=True, blank=True)
 
     institution_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    datetime_str = models.CharField(max_length=50, null=True, blank=True)
 
     raw_data = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

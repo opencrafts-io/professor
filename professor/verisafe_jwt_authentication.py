@@ -1,9 +1,11 @@
 import logging
+
 from rest_framework import status
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 
 from users.models import User
+
 from .verisafe_jwt import verify_verisafe_jwt  # from earlier
 
 logger = logging.getLogger("django")
@@ -11,7 +13,7 @@ logger = logging.getLogger("django")
 
 class VerisafeJWTAuthentication(BaseAuthentication):
     def authenticate(self, request):
-        if request.path == "/ping":
+        if request.path == "/ping" or request.path == "/api/exams/ingest/":
             return None
 
         auth_header = request.headers.get("Authorization", "")
@@ -25,7 +27,12 @@ class VerisafeJWTAuthentication(BaseAuthentication):
         try:
             payload = verify_verisafe_jwt(token)
             request.verisafe_claims = payload
-            request.user_id = payload["sub"]
+            user_id = payload.get("sub")
+            if not user_id:
+                raise AuthenticationFailed(
+                    "Token missing required 'sub' claim", code="invalid_token"
+                )
+            request.user_id = user_id
             user = User.objects.filter(user_id=request.user_id).first()
 
             if not user:
