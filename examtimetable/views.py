@@ -1,23 +1,23 @@
+import logging
 from datetime import datetime
-from django.utils import timezone
 
-from courses.models import SemesterInfo, StudentCourseEnrollment
 from django.db import transaction
 from django.db.models import QuerySet
-from professor.pagination import ResultsSetPagination
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from courses.models import SemesterInfo, StudentCourseEnrollment
+from professor.pagination import ResultsSetPagination
 from users.models import StudentProfile
 
 from .models import ExamSchedule
-from .serializers import (
-    ExamScheduleIngestItemSerializer,
-    ExamScheduleIngestRequestSerializer,
-    ExamScheduleSerializer,
-)
+from .serializers import ExamScheduleIngestRequestSerializer, ExamScheduleSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class StudentExamScheduleView(APIView):
@@ -237,22 +237,11 @@ class IngestExamScheduleView(APIView):
 
                 if items_to_update:
                     fields_to_update = [
-                        "course_name",
-                        "exam_date",
                         "start_time",
                         "end_time",
-                        "day",
                         "venue",
-                        "campus",
                         "coordinator",
                         "hrs",
-                        "invigilator",
-                        "location",
-                        "room",
-                        "building",
-                        "exam_type",
-                        "instructions",
-                        "datetime_str",
                         "raw_data",
                         "updated_at",
                     ]
@@ -261,52 +250,28 @@ class IngestExamScheduleView(APIView):
                     )
                     updated_count = len(items_to_update)
 
+            return Response(
+                {
+                    "message": "Ingestion completed successfully",
+                    "created_count": created_count,
+                    "updated_count": updated_count,
+                    "skipped_count": skipped_count,
+                },
+                status=status.HTTP_201_CREATED if created_count > 0 else status.HTTP_200_OK,
+            )
+
         except Exception as e:
+            logger.exception("Failed to ingest exam schedule")
             return Response(
                 {
                     "error": "ingestion_failed",
                     "errors": [
                         {
                             "code": "server_error",
-                            "message": str(e),
+                            "message": "An internal server error occurred",
                         }
                     ],
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        try:
-            import json
-
-            from event_bus import publisher
-
-            # Identify unique course codes that were updated
-            touched_courses = list(
-                set([item["course_code"] for i, item in deduplicated_items.values()])
-            )
-
-            message = {
-                "institution_id": institution_id,
-                "semester_id": semester_id,
-                "course_codes": touched_courses,
-                "timestamp": str(datetime.now()),
-            }
-
-            publisher.publish(
-                exchange="professor.events",
-                queue_name="batch.exam_schedule.ingested",
-                message=json.dumps(message),
-            )
-        except Exception as e:
-            # Log error but don't fail
-            logger.error(f"Failed to publish event: {e}")
-
-        return Response(
-            {
-                "created": created_count,
-                "updated": updated_count,
-                "skipped": skipped_count,
-                "errors": [],
-            },
-            status=status.HTTP_200_OK,
-        )

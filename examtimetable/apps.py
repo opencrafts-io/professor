@@ -6,4 +6,4 @@ class ExamtimetableConfig(AppConfig):
     name = 'examtimetable'
 
     def ready(self) -> None:
-        import examtimetable.consumers
+        pass
