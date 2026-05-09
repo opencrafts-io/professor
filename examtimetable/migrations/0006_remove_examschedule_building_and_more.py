@@ -1,5 +1,6 @@
 from django.db import migrations, models
 from datetime import datetime
+from django.utils import timezone
 
 def migrate_times(apps, schema_editor):
     ExamSchedule = apps.get_model('examtimetable', 'ExamSchedule')
@@ -7,10 +8,10 @@ def migrate_times(apps, schema_editor):
         save_needed = False
         if exam.exam_date:
             if exam.start_time:
-                exam.start_time_tmp = datetime.combine(exam.exam_date, exam.start_time)
+                exam.start_time_tmp = timezone.make_aware(datetime.combine(exam.exam_date, exam.start_time))
                 save_needed = True
             if exam.end_time:
-                exam.end_time_tmp = datetime.combine(exam.exam_date, exam.end_time)
+                exam.end_time_tmp = timezone.make_aware(datetime.combine(exam.exam_date, exam.end_time))
                 save_needed = True
         if save_needed:
             exam.save()
