@@ -99,6 +99,7 @@ POST /exams/by-codes/
 ```
 
 Retrieve exam schedules for a list of course codes.
+This is already handled by the Academia mobile frontend.
 
 **Request Body:**
 
