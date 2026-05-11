@@ -6,13 +6,16 @@ API for providing you with your school information.
 
 ```
 ```
-### Overview
+### Introduction & Purpose
 
-The Exam Timetable API provides an interface for ingesting and retrieving exam schedules. The API enforces a minimal schema with only essential fields.
+The **Exam Timetable API** provides an interface to ingest exam schedule data and serve it directly to the Academia app.
+
+**Who is this for?**
+This endpoint is intended for institutional administrators and/or developers who need to enable exam tracking for their students. By following the data contract below, you can ensure your institution's schedules are seamlessly integrated into the Academia mobile.
 
 ---
 
-### Data Contract — Input (Ingestion)
+### Data Contract
 
 When submitting exam schedule data via the `/exams/ingest/` endpoint, you **must** provide only the following fields:
 
@@ -34,41 +37,13 @@ When submitting exam schedule data via the `/exams/ingest/` endpoint, you **must
 }
 ```
 
----
-
-### Data Contract — Output
-
-When retrieving exam schedules, the API returns data in the following standardized format:
-
-```json
-{
-  "course_code": "string",
-  "start_time": "ISO 8601 datetime (UTC)",
-  "end_time": "ISO 8601 datetime (UTC)",
-  "venue": "string",
-  "coordinator": "string",
-  "hrs": "string",
-  "semester": "integer or null",
-  "institution_id": "string",
-  "raw_data": "object",
-  "created_at": "ISO 8601 datetime",
-  "updated_at": "ISO 8601 datetime"
-}
-```
-
----
-
-## Endpoints
-
-### Ingest Exam Schedules
+## Endpoint
 
 ```
 POST /exams/ingest/
 ```
 
 Submit a batch of exam schedules for ingestion.
-
-**Request Body:** See [Data Contract — Input](#data-contract--input-ingestion) above.
 
 **Response:**
 
@@ -92,22 +67,3 @@ Submit a batch of exam schedules for ingestion.
 
 ---
 
-### Get Exams by Course Codes
-
-```
-POST /exams/by-codes/
-```
-
-Retrieve exam schedules for a list of course codes.
-This is already handled by the Academia mobile frontend.
-
-**Request Body:**
-
-```json
-{
-  "institution_id": "string (required)",
-  "course_codes": ["CS101", "CS102", "CS103"]
-}
-```
-
-**Response:** A list of exam records matching the provided course codes. Each record follows the [Output Data Contract](#data-contract--output) above.

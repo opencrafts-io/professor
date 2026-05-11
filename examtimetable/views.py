@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 
 from django.db import transaction
 from django.db.models import QuerySet
@@ -15,7 +14,7 @@ from professor.pagination import ResultsSetPagination
 from users.models import StudentProfile
 
 from .models import ExamSchedule
-from .serializers import ExamScheduleIngestRequestSerializer, ExamScheduleSerializer
+from .serializers import ExamScheduleSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +158,23 @@ class IngestExamScheduleView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = ExamScheduleIngestRequestSerializer(data=request.data)
+        institution_id = request.data.get("institution_id")
+        semester_id = request.data.get("semester_id")
+        items_data = request.data.get("items")
+
+        if not institution_id:
+            return Response(
+                {"error": "institution_id is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if items_data is None or not isinstance(items_data, list):
+            return Response(
+                {"error": "items must be a list"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = ExamScheduleSerializer(data=items_data, many=True)
         if not serializer.is_valid():
             return Response(
                 {
@@ -175,10 +190,7 @@ class IngestExamScheduleView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        data = serializer.validated_data
-        institution_id = data["institution_id"]
-        semester_id = data.get("semester_id")
-        items_data = data["items"]
+        items_data = serializer.validated_data
 
         # 1. Deduplicate
         deduplicated_items = {}
@@ -257,21 +269,22 @@ class IngestExamScheduleView(APIView):
                     "updated_count": updated_count,
                     "skipped_count": skipped_count,
                 },
-                status=status.HTTP_201_CREATED if created_count > 0 else status.HTTP_200_OK,
+                status=(
+                    status.HTTP_201_CREATED if created_count > 0 else status.HTTP_200_OK
+                ),
             )
 
         except Exception as e:
-            logger.exception("Failed to ingest exam schedule")
+            logger.exception(f"Failed to ingest exam schedule: {e}")
             return Response(
                 {
                     "error": "ingestion_failed",
                     "errors": [
                         {
                             "code": "server_error",
-                            "message": "An internal server error occurred",
+                            "message": str(e),
                         }
                     ],
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
