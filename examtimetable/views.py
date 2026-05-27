@@ -158,15 +158,7 @@ class IngestExamScheduleView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        institution_id = request.data.get("institution_id")
-        semester_id = request.data.get("semester_id")
-        items_data = request.data.get("items")
-
-        if not institution_id:
-            return Response(
-                {"error": "institution_id is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        items_data = request.data.get("items", request.data)
 
         if items_data is None or not isinstance(items_data, list):
             return Response(
@@ -197,7 +189,13 @@ class IngestExamScheduleView(APIView):
         skipped_count = 0
         for i, item_data in enumerate(items_data):
             course_code = item_data["course_code"]
-            key = (institution_id, semester_id, course_code)
+            inst = item_data["institution_id"]
+            sem = item_data.get("semester")
+            
+            inst_id = inst.id if inst else None
+            sem_id = sem.id if sem else None
+
+            key = (inst_id, sem_id, course_code)
             if key in deduplicated_items:
                 skipped_count += 1
             deduplicated_items[key] = (i, item_data)
@@ -211,24 +209,29 @@ class IngestExamScheduleView(APIView):
             course_codes = [
                 item_data["course_code"] for _, item_data in deduplicated_items.values()
             ]
+            institution_ids = list(set([
+                item_data["institution_id"].id for _, item_data in deduplicated_items.values()
+            ]))
 
             # Fetch existing records to separate create vs update
             existing_exams = ExamSchedule.objects.filter(
-                institution_id=institution_id,
-                semester_id=semester_id,
+                institution_id__in=institution_ids,
                 course_code__in=course_codes,
             )
-            existing_map = {exam.course_code: exam for exam in existing_exams}
+            existing_map = {(exam.institution_id_id, exam.semester_id, exam.course_code): exam for exam in existing_exams}
 
             items_to_create = []
             items_to_update = []
             now = timezone.now()
 
             for key, (original_index, item_data) in deduplicated_items.items():
-                course_code = item_data["course_code"]
+                inst_id = key[0]
+                sem_id = key[1]
+                course_code = key[2]
 
-                if course_code in existing_map:
-                    obj = existing_map[course_code]
+                map_key = (inst_id, sem_id, course_code)
+                if map_key in existing_map:
+                    obj = existing_map[map_key]
                     for field, value in item_data.items():
                         setattr(obj, field, value)
                     obj.updated_at = now

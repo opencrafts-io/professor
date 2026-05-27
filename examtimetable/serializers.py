@@ -31,6 +31,6 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "end_time": {"required": True, "allow_null": False},
             "venue": {"required": True, "allow_blank": False},
             "hrs": {"required": True, "allow_null": False},
-            "institution_id": {"required": False},
+            "institution_id": {"required": True},
             "semester": {"required": False},
         }

@@ -21,10 +21,10 @@ When submitting exam schedule data via the `/exams/ingest/` endpoint, you **must
 
 ```json
 {
-  "institution_id": "string (required, max 100 chars, non-empty)",
-  "semester_id": "integer (optional, nullable)",
   "items": [
     {
+      "institution_id": "string (required, max 100 chars, non-empty)",
+      "semester": "integer (optional, nullable)",
       "course_code": "string (required, non-empty)",
       "start_time": "ISO 8601 datetime (required)",
       "end_time": "ISO 8601 datetime (required)",
