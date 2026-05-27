@@ -233,7 +233,7 @@ class IngestExamScheduleView(APIView):
             inst = item_data["institution_id"]
             sem = item_data.get("semester")
             
-            inst_id = inst.id if inst else None
+            inst_id = inst.pk if inst else None
             sem_id = sem.id if sem else None
 
             key = (inst_id, sem_id, course_code)
@@ -251,7 +251,7 @@ class IngestExamScheduleView(APIView):
                 item_data["course_code"] for _, item_data in deduplicated_items.values()
             ]
             institution_ids = list(set([
-                item_data["institution_id"].id for _, item_data in deduplicated_items.values()
+                item_data["institution_id"].pk for _, item_data in deduplicated_items.values()
             ]))
 
             # Fetch existing records to separate create vs update
