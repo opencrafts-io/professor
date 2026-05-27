@@ -57,6 +57,10 @@ class StudentExamScheduleView(APIView):
         exams = ExamSchedule.objects.filter(course_code__in=course_codes)
         if semester_id:
             exams = exams.filter(semester_id=semester_id)
+        else:
+            latest_exam = exams.order_by('-start_time').first()
+            if latest_exam and latest_exam.semester_id:
+                exams = exams.filter(semester_id=latest_exam.semester_id)
 
         serializer = ExamScheduleSerializer(exams, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -80,6 +84,10 @@ class ExamScheduleListView(ListAPIView):
             queryset = queryset.filter(course_code__icontains=course_code)
         if semester_id:
             queryset = queryset.filter(semester_id=semester_id)
+        else:
+            latest_exam = queryset.order_by('-start_time').first()
+            if latest_exam and latest_exam.semester_id:
+                queryset = queryset.filter(semester_id=latest_exam.semester_id)
 
         return queryset
 
@@ -105,6 +113,12 @@ class ExamScheduleByCourseCodesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        semester_id = request.data.get("semester_id")
+        if not semester_id:
+            latest_exam = ExamSchedule.objects.filter(institution_id=institution_id).order_by('-start_time').first()
+            if latest_exam and latest_exam.semester_id:
+                semester_id = latest_exam.semester_id
+
         exams_info = []  # will hold the Data to return
 
         for course_code in course_codes:
@@ -115,9 +129,15 @@ class ExamScheduleByCourseCodesView(APIView):
                 course_code = course_code[:-1]
 
             mod_course_code = "".join(f"{char}\s*" for char in course_code)
-            for exam_info in ExamSchedule.objects.filter(
+            
+            qs = ExamSchedule.objects.filter(
                 course_code__iregex=f".*{mod_course_code}.*",
-            ).all():
+                institution_id=institution_id,
+            )
+            if semester_id:
+                qs = qs.filter(semester_id=semester_id)
+                
+            for exam_info in qs.all():
                 exams_info.append(exam_info)
 
         serializer = ExamScheduleSerializer(exams_info, many=True)
@@ -144,6 +164,10 @@ class ExamScheduleByInstitutionView(APIView):
 
         if semester_id:
             exams = exams.filter(semester_id=semester_id)
+        else:
+            latest_exam = exams.order_by('-start_time').first()
+            if latest_exam and latest_exam.semester_id:
+                exams = exams.filter(semester_id=latest_exam.semester_id)
 
         serializer = ExamScheduleSerializer(exams, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -165,6 +189,23 @@ class IngestExamScheduleView(APIView):
                 {"error": "items must be a list"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        semester_cache = {}
+        for item in items_data:
+            if isinstance(item, dict) and "semester" in item:
+                sem_code = item["semester"]
+                if isinstance(sem_code, str):
+                    if sem_code not in semester_cache:
+                        sem_obj, _ = SemesterInfo.objects.get_or_create(
+                            code=sem_code,
+                            defaults={
+                                "name": sem_code,
+                                "start_date": timezone.now().date(),
+                                "end_date": timezone.now().date()
+                            }
+                        )
+                        semester_cache[sem_code] = sem_obj.id
+                    item["semester"] = semester_cache[sem_code]
 
         serializer = ExamScheduleSerializer(data=items_data, many=True)
         if not serializer.is_valid():
@@ -239,8 +280,6 @@ class IngestExamScheduleView(APIView):
                 else:
                     items_to_create.append(
                         ExamSchedule(
-                            institution_id=institution_id,
-                            semester_id=semester_id,
                             **item_data,
                         )
                     )
