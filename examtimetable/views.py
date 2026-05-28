@@ -58,7 +58,7 @@ class StudentExamScheduleView(APIView):
         if semester_id:
             exams = exams.filter(semester_id=semester_id)
         else:
-            latest_exam = exams.order_by('-start_time').first()
+            latest_exam = exams.order_by('-start_time', '-pk').first()
             if latest_exam and latest_exam.semester_id:
                 exams = exams.filter(semester_id=latest_exam.semester_id)
 
@@ -85,7 +85,7 @@ class ExamScheduleListView(ListAPIView):
         if semester_id:
             queryset = queryset.filter(semester_id=semester_id)
         else:
-            latest_exam = queryset.order_by('-start_time').first()
+            latest_exam = queryset.order_by('-start_time', '-pk').first()
             if latest_exam and latest_exam.semester_id:
                 queryset = queryset.filter(semester_id=latest_exam.semester_id)
 
@@ -115,7 +115,7 @@ class ExamScheduleByCourseCodesView(APIView):
 
         semester_id = request.data.get("semester_id")
         if not semester_id:
-            latest_exam = ExamSchedule.objects.filter(institution_id=institution_id).order_by('-start_time').first()
+            latest_exam = ExamSchedule.objects.filter(institution_id=institution_id).order_by('-start_time', '-pk').first()
             if latest_exam and latest_exam.semester_id:
                 semester_id = latest_exam.semester_id
 
@@ -165,7 +165,7 @@ class ExamScheduleByInstitutionView(APIView):
         if semester_id:
             exams = exams.filter(semester_id=semester_id)
         else:
-            latest_exam = exams.order_by('-start_time').first()
+            latest_exam = exams.order_by('-start_time', '-pk').first()
             if latest_exam and latest_exam.semester_id:
                 exams = exams.filter(semester_id=latest_exam.semester_id)
 
@@ -182,11 +182,15 @@ class IngestExamScheduleView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        items_data = request.data.get("items", request.data)
+        # Expect request data to be a dict representing a single exam schedule or a list of such dicts
+        if isinstance(request.data, list):
+            items_data = request.data
+        else:
+            items_data = [request.data]
 
-        if items_data is None or not isinstance(items_data, list):
+        if not items_data:
             return Response(
-                {"error": "items must be a list"},
+                {"error": "no exam schedule data provided"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

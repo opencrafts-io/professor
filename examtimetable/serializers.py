@@ -32,5 +32,5 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "venue": {"required": True, "allow_blank": False},
             "hrs": {"required": True, "allow_null": False},
             "institution_id": {"required": True},
-            "semester": {"required": False},
+            "semester": {"required": True},
         }

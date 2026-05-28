@@ -36,8 +36,7 @@ When submitting exam schedule data via the `/exams/ingest/` endpoint, you **must
   ]
 }
 ```
-Note the semester field takes any variation of semester (eg: JAN26, JAN-26, JAN/26) -> So any school can upload what works for them.
-As long as when uploading final version of the exam schedule you have to use the same exact value so that it updates.
+The semester field accepts variations (e.g., JAN26, JAN-26, JAN/26); when uploading a final exam schedule, reuse the identical semester value so the system recognizes it as an update.
 
 ## Endpoint
 
