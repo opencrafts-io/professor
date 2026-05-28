@@ -1,5 +1,6 @@
 import logging
 
+from datetime import timedelta
 from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
@@ -58,7 +59,7 @@ class StudentExamScheduleView(APIView):
         if semester_id:
             exams = exams.filter(semester_id=semester_id)
         else:
-            latest_exam = exams.order_by('-start_time', '-pk').first()
+            latest_exam = exams.order_by("-start_time", "-pk").first()
             if latest_exam and latest_exam.semester_id:
                 exams = exams.filter(semester_id=latest_exam.semester_id)
 
@@ -85,7 +86,7 @@ class ExamScheduleListView(ListAPIView):
         if semester_id:
             queryset = queryset.filter(semester_id=semester_id)
         else:
-            latest_exam = queryset.order_by('-start_time', '-pk').first()
+            latest_exam = queryset.order_by("-start_time", "-pk").first()
             if latest_exam and latest_exam.semester_id:
                 queryset = queryset.filter(semester_id=latest_exam.semester_id)
 
@@ -115,7 +116,11 @@ class ExamScheduleByCourseCodesView(APIView):
 
         semester_id = request.data.get("semester_id")
         if not semester_id:
-            latest_exam = ExamSchedule.objects.filter(institution_id=institution_id).order_by('-start_time', '-pk').first()
+            latest_exam = (
+                ExamSchedule.objects.filter(institution_id=institution_id)
+                .order_by("-start_time", "-pk")
+                .first()
+            )
             if latest_exam and latest_exam.semester_id:
                 semester_id = latest_exam.semester_id
 
@@ -129,14 +134,14 @@ class ExamScheduleByCourseCodesView(APIView):
                 course_code = course_code[:-1]
 
             mod_course_code = "".join(f"{char}\s*" for char in course_code)
-            
+
             qs = ExamSchedule.objects.filter(
                 course_code__iregex=f".*{mod_course_code}.*",
                 institution_id=institution_id,
             )
             if semester_id:
                 qs = qs.filter(semester_id=semester_id)
-                
+
             for exam_info in qs.all():
                 exams_info.append(exam_info)
 
@@ -165,7 +170,7 @@ class ExamScheduleByInstitutionView(APIView):
         if semester_id:
             exams = exams.filter(semester_id=semester_id)
         else:
-            latest_exam = exams.order_by('-start_time', '-pk').first()
+            latest_exam = exams.order_by("-start_time", "-pk").first()
             if latest_exam and latest_exam.semester_id:
                 exams = exams.filter(semester_id=latest_exam.semester_id)
 
@@ -182,15 +187,14 @@ class IngestExamScheduleView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        # Expect request data to be a dict representing a single exam schedule or a list of such dicts
         if isinstance(request.data, list):
             items_data = request.data
         else:
-            items_data = [request.data]
+            items_data = request.data.get("items", request.data)
 
-        if not items_data:
+        if items_data is None or not isinstance(items_data, list):
             return Response(
-                {"error": "no exam schedule data provided"},
+                {"error": "items must be a list"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -205,8 +209,8 @@ class IngestExamScheduleView(APIView):
                             defaults={
                                 "name": sem_code,
                                 "start_date": timezone.now().date(),
-                                "end_date": timezone.now().date()
-                            }
+                                "end_date": timezone.now().date() + timedelta(weeks=13),
+                            },
                         )
                         semester_cache[sem_code] = sem_obj.id
                     item["semester"] = semester_cache[sem_code]
@@ -236,7 +240,7 @@ class IngestExamScheduleView(APIView):
             course_code = item_data["course_code"]
             inst = item_data["institution_id"]
             sem = item_data.get("semester")
-            
+
             inst_id = inst.pk if inst else None
             sem_id = sem.id if sem else None
 
@@ -254,16 +258,24 @@ class IngestExamScheduleView(APIView):
             course_codes = [
                 item_data["course_code"] for _, item_data in deduplicated_items.values()
             ]
-            institution_ids = list(set([
-                item_data["institution_id"].pk for _, item_data in deduplicated_items.values()
-            ]))
+            institution_ids = list(
+                set(
+                    [
+                        item_data["institution_id"].pk
+                        for _, item_data in deduplicated_items.values()
+                    ]
+                )
+            )
 
             # Fetch existing records to separate create vs update
             existing_exams = ExamSchedule.objects.filter(
                 institution_id__in=institution_ids,
                 course_code__in=course_codes,
             )
-            existing_map = {(exam.institution_id_id, exam.semester_id, exam.course_code): exam for exam in existing_exams}
+            existing_map = {
+                (exam.institution_id_id, exam.semester_id, exam.course_code): exam
+                for exam in existing_exams
+            }
 
             items_to_create = []
             items_to_update = []

@@ -35,7 +35,13 @@ class Course(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='courses', null=True, blank=True)
+    institution = models.ForeignKey(
+        Institution,
+        on_delete=models.CASCADE,
+        related_name="courses",
+        null=True,
+        blank=True,
+    )
 
     def __str__(self):
         return f"{self.course_code} - {self.course_name}"
@@ -102,8 +108,11 @@ class ScheduleEntry(models.Model):
     def __str__(self):
         return f"{self.course_code} - {self.day_of_week} {self.start_time}"
 
+
 class Transcript(models.Model):
-    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='transcripts')
+    student = models.ForeignKey(
+        StudentProfile, on_delete=models.CASCADE, related_name="transcripts"
+    )
 
     overall_gpa = models.FloatField(null=True, blank=True)
     total_credits = models.FloatField(null=True, blank=True)
@@ -119,15 +128,28 @@ class Transcript(models.Model):
     def __str__(self):
         return f"{self.student.user.username} - {self.student.program} - {self.generated_date}"
 
+
 class StudentCourseEnrollment(models.Model):
-    student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='student_course_enrollments')
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='student_course_enrollments')
-    semester = models.ForeignKey(SemesterInfo, on_delete=models.CASCADE, related_name='student_course_enrollments')
-    enrollment_status = models.CharField(max_length=50, default='enrolled', null=True, blank=True)
+    student = models.ForeignKey(
+        StudentProfile,
+        on_delete=models.CASCADE,
+        related_name="student_course_enrollments",
+    )
+    course = models.ForeignKey(
+        Course, on_delete=models.CASCADE, related_name="student_course_enrollments"
+    )
+    semester = models.ForeignKey(
+        SemesterInfo,
+        on_delete=models.CASCADE,
+        related_name="student_course_enrollments",
+    )
+    enrollment_status = models.CharField(
+        max_length=50, default="enrolled", null=True, blank=True
+    )
     enrolled_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['student', 'course', 'semester']
+        unique_together = ["student", "course", "semester"]
 
     def __str__(self):
         return f"{self.student.user.username} - {self.course.course_code} - {self.semester.code}"

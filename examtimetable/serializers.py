@@ -8,7 +8,8 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
     Serializer for ExamSchedule.
     """
 
-    raw_data = serializers.JSONField(required=False, default=dict)
+    raw_data = serializers.JSONField(required=False, allow_null=True)
+
 
     class Meta:
         model = ExamSchedule
@@ -31,6 +32,5 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "end_time": {"required": True, "allow_null": False},
             "venue": {"required": True, "allow_blank": False},
             "hrs": {"required": True, "allow_null": False},
-            "institution_id": {"required": True},
-            "semester": {"required": True},
         }
+        validators = []
