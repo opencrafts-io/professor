@@ -98,6 +98,8 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", None)
 RABBITMQ_PORT = os.getenv("RABBITMQ_PORT", None)
 RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", None)
 
+INGEST_API_KEY = os.environ.get("INGEST_API_KEY", "dev-ingest-key-change-in-production")
+
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 30,

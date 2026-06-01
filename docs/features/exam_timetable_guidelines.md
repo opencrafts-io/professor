@@ -17,7 +17,7 @@ This endpoint is intended for institutional administrators and/or developers who
 
 ### Data Contract
 
-When submitting exam schedule data via the `/exams/ingest/` endpoint, you **must** provide only the following fields:
+When submitting exam schedule data via the `/api/exams/ingest/` endpoint, you **must** provide only the following fields:
 
 ```json
 {
@@ -41,10 +41,20 @@ The semester field accepts variations (e.g., JAN26, JAN-26, JAN/26); when upload
 ## Endpoint
 
 ```
-POST /exams/ingest/
+POST /api/exams/ingest/
 ```
 
 Submit a batch of exam schedules for ingestion.
+
+### Authentication
+
+This endpoint requires an API key. Include it as the `X-API-Key` header on every request:
+
+```
+X-API-Key: your-api-key-here
+```
+
+Contact the administrator to obtain a valid API key. Requests without a valid key will be rejected.
 
 **Response:**
 
@@ -64,6 +74,7 @@ Submit a batch of exam schedules for ingestion.
 | `201 Created` | New records were created |
 | `200 OK` | Only updates occurred |
 | `400 Bad Request` | Invalid request payload |
+| `403 Forbidden` | Missing or invalid API key |
 | `500 Internal Server Error` | Server error during processing |
 
 ---
