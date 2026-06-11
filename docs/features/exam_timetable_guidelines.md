@@ -50,7 +50,7 @@ Submit a batch of exam schedules for ingestion.
 
 This endpoint requires an API key. Include it as the `X-API-Key` header on every request:
 
-```
+```http
 X-API-Key: your-api-key-here
 ```
 

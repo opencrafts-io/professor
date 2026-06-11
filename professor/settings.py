@@ -98,7 +98,12 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", None)
 RABBITMQ_PORT = os.getenv("RABBITMQ_PORT", None)
 RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", None)
 
-INGEST_API_KEY = os.environ.get("INGEST_API_KEY", "dev-ingest-key-change-in-production")
+INGEST_API_KEY = os.environ.get("INGEST_API_KEY")
+if not INGEST_API_KEY:
+    raise RuntimeError(
+        "INGEST_API_KEY environment variable is not set. "
+        "Set it in your .env file or environment before starting the server."
+    )
 
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
