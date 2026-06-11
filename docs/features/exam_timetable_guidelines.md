@@ -21,10 +21,10 @@ When submitting exam schedule data via the `/exams/ingest/` endpoint, you **must
 
 ```json
 {
-  "institution_id": "string (required, max 100 chars, non-empty)",
-  "semester_id": "integer (optional, nullable)",
   "items": [
     {
+      "institution_id": "string (required, max 100 chars, non-empty)",
+      "semester": "string (optional, e.g., 'Jan26') - Used to group exams and overwrite draft timetables.",
       "course_code": "string (required, non-empty)",
       "start_time": "ISO 8601 datetime (required)",
       "end_time": "ISO 8601 datetime (required)",
@@ -36,6 +36,7 @@ When submitting exam schedule data via the `/exams/ingest/` endpoint, you **must
   ]
 }
 ```
+The semester field accepts variations (e.g., JAN26, JAN-26, JAN/26); when uploading a final exam schedule, reuse the identical semester value so the system recognizes it as an update.
 
 ## Endpoint
 

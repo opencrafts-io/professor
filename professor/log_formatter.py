@@ -4,7 +4,7 @@ from json_log_formatter import JSONFormatter
 class StandardJSONLogFormatter(JSONFormatter):
     def json_record(self, message, extra, record):
         request = extra.pop("request", None)
-        if request:
+        if request and hasattr(request, "META"):
             # Add any other parameter
             extra["IP_ADDRESS"] = request.META.get(
                 "HTTP_X_FORWARDED_FOR"
