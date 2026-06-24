@@ -6,11 +6,12 @@ from django.db.models import QuerySet
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.generics import ListAPIView
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from courses.models import SemesterInfo, StudentCourseEnrollment
+
+from .auth import IngestAPIKeyPermission
 from professor.pagination import ResultsSetPagination
 from users.models import StudentProfile
 
@@ -184,7 +185,7 @@ class IngestExamScheduleView(APIView):
     POST: institution_id (required), semester_id (optional), items (required array)
     """
 
-    permission_classes = [AllowAny]
+    permission_classes = [IngestAPIKeyPermission]
 
     def post(self, request):
         if isinstance(request.data, list):
