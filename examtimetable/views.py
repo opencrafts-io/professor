@@ -185,6 +185,7 @@ class IngestExamScheduleView(APIView):
     POST: institution_id (required), semester_id (optional), items (required array)
     """
 
+    authentication_classes = []
     permission_classes = [IngestAPIKeyPermission]
 
     def post(self, request):
