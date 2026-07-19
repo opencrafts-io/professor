@@ -1,23 +1,24 @@
-from datetime import datetime
+import logging
 
+from datetime import timedelta
 from django.db import transaction
 from django.db.models import QuerySet
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
 
 from courses.models import SemesterInfo, StudentCourseEnrollment
+
+from .auth import IngestAPIKeyPermission
 from professor.pagination import ResultsSetPagination
 from users.models import StudentProfile
 
 from .models import ExamSchedule
-from .serializers import (
-    ExamScheduleIngestItemSerializer,
-    ExamScheduleIngestRequestSerializer,
-    ExamScheduleSerializer,
-)
+from .serializers import ExamScheduleSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class StudentExamScheduleView(APIView):
@@ -58,6 +59,10 @@ class StudentExamScheduleView(APIView):
         exams = ExamSchedule.objects.filter(course_code__in=course_codes)
         if semester_id:
             exams = exams.filter(semester_id=semester_id)
+        else:
+            latest_exam = exams.order_by("-start_time", "-pk").first()
+            if latest_exam and latest_exam.semester_id:
+                exams = exams.filter(semester_id=latest_exam.semester_id)
 
         serializer = ExamScheduleSerializer(exams, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -81,6 +86,10 @@ class ExamScheduleListView(ListAPIView):
             queryset = queryset.filter(course_code__icontains=course_code)
         if semester_id:
             queryset = queryset.filter(semester_id=semester_id)
+        else:
+            latest_exam = queryset.order_by("-start_time", "-pk").first()
+            if latest_exam and latest_exam.semester_id:
+                queryset = queryset.filter(semester_id=latest_exam.semester_id)
 
         return queryset
 
@@ -106,6 +115,16 @@ class ExamScheduleByCourseCodesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        semester_id = request.data.get("semester_id")
+        if not semester_id:
+            latest_exam = (
+                ExamSchedule.objects.filter(institution_id=institution_id)
+                .order_by("-start_time", "-pk")
+                .first()
+            )
+            if latest_exam and latest_exam.semester_id:
+                semester_id = latest_exam.semester_id
+
         exams_info = []  # will hold the Data to return
 
         for course_code in course_codes:
@@ -116,9 +135,15 @@ class ExamScheduleByCourseCodesView(APIView):
                 course_code = course_code[:-1]
 
             mod_course_code = "".join(f"{char}\s*" for char in course_code)
-            for exam_info in ExamSchedule.objects.filter(
+
+            qs = ExamSchedule.objects.filter(
                 course_code__iregex=f".*{mod_course_code}.*",
-            ).all():
+                institution_id=institution_id,
+            )
+            if semester_id:
+                qs = qs.filter(semester_id=semester_id)
+
+            for exam_info in qs.all():
                 exams_info.append(exam_info)
 
         serializer = ExamScheduleSerializer(exams_info, many=True)
@@ -145,6 +170,10 @@ class ExamScheduleByInstitutionView(APIView):
 
         if semester_id:
             exams = exams.filter(semester_id=semester_id)
+        else:
+            latest_exam = exams.order_by("-start_time", "-pk").first()
+            if latest_exam and latest_exam.semester_id:
+                exams = exams.filter(semester_id=latest_exam.semester_id)
 
         serializer = ExamScheduleSerializer(exams, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -155,9 +184,40 @@ class IngestExamScheduleView(APIView):
     Ingest exam schedules from JSON payload.
     POST: institution_id (required), semester_id (optional), items (required array)
     """
-    permission_classes = [AllowAny]
+
+    authentication_classes = []
+    permission_classes = [IngestAPIKeyPermission]
+
     def post(self, request):
-        serializer = ExamScheduleIngestRequestSerializer(data=request.data)
+        if isinstance(request.data, list):
+            items_data = request.data
+        else:
+            items_data = request.data.get("items", request.data)
+
+        if items_data is None or not isinstance(items_data, list):
+            return Response(
+                {"error": "items must be a list"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        semester_cache = {}
+        for item in items_data:
+            if isinstance(item, dict) and "semester" in item:
+                sem_code = item["semester"]
+                if isinstance(sem_code, str):
+                    if sem_code not in semester_cache:
+                        sem_obj, _ = SemesterInfo.objects.get_or_create(
+                            code=sem_code,
+                            defaults={
+                                "name": sem_code,
+                                "start_date": timezone.now().date(),
+                                "end_date": timezone.now().date() + timedelta(weeks=13),
+                            },
+                        )
+                        semester_cache[sem_code] = sem_obj.id
+                    item["semester"] = semester_cache[sem_code]
+
+        serializer = ExamScheduleSerializer(data=items_data, many=True)
         if not serializer.is_valid():
             return Response(
                 {
@@ -173,17 +233,20 @@ class IngestExamScheduleView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        data = serializer.validated_data
-        institution_id = data["institution_id"]
-        semester_id = data.get("semester_id")
-        items_data = data["items"]
+        items_data = serializer.validated_data
 
         # 1. Deduplicate
         deduplicated_items = {}
         skipped_count = 0
         for i, item_data in enumerate(items_data):
             course_code = item_data["course_code"]
-            key = (institution_id, semester_id, course_code)
+            inst = item_data["institution_id"]
+            sem = item_data.get("semester")
+
+            inst_id = inst.pk if inst else None
+            sem_id = sem.id if sem else None
+
+            key = (inst_id, sem_id, course_code)
             if key in deduplicated_items:
                 skipped_count += 1
             deduplicated_items[key] = (i, item_data)
@@ -192,86 +255,96 @@ class IngestExamScheduleView(APIView):
         updated_count = 0
         errors = []
 
-        # 2. Process items atomically
+        # 2. Process items in bulk
         try:
-            with transaction.atomic():
-                for key, (original_index, item_data) in deduplicated_items.items():
-                    course_code = item_data["course_code"]
-
-                    lookup = {
-                        "course_code": course_code,
-                        "institution_id": institution_id,
-                        "semester_id": semester_id,
-                    }
-
-                    try:
-                        obj, created = ExamSchedule.objects.update_or_create(
-                            **lookup, defaults=item_data
-                        )
-                        if created:
-                            created_count += 1
-                        else:
-                            updated_count += 1
-                    except Exception as e:
-                        errors.append(
-                            {
-                                "code": "server_error",
-                                "message": str(e),
-                                "item_index": original_index,
-                                "key": {
-                                    "institution_id": institution_id,
-                                    "semester_id": semester_id,
-                                    "course_code": course_code,
-                                },
-                            }
-                        )
-                        raise e  # Rollback
-        except Exception as e:
-            if not errors:
-                return Response(
-                    {
-                        "error": "ingestion_failed",
-                        "errors": [{"code": "server_error", "message": str(e)}],
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            course_codes = [
+                item_data["course_code"] for _, item_data in deduplicated_items.values()
+            ]
+            institution_ids = list(
+                set(
+                    [
+                        item_data["institution_id"].pk
+                        for _, item_data in deduplicated_items.values()
+                    ]
                 )
-            return Response(
-                {"error": "ingestion_failed", "errors": errors},
-                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            import json
-
-            from event_bus import publisher
-
-            # Identify unique course codes that were updated
-            touched_courses = list(
-                set([item["course_code"] for i, item in deduplicated_items.values()])
+            # Fetch existing records to separate create vs update
+            existing_exams = ExamSchedule.objects.filter(
+                institution_id__in=institution_ids,
+                course_code__in=course_codes,
             )
-
-            message = {
-                "institution_id": institution_id,
-                "semester_id": semester_id,
-                "course_codes": touched_courses,
-                "timestamp": str(datetime.now()),
+            existing_map = {
+                (exam.institution_id_id, exam.semester_id, exam.course_code): exam
+                for exam in existing_exams
             }
 
-            publisher.publish(
-                exchange="professor.events",
-                queue_name="batch.exam_schedule.ingested",
-                message=json.dumps(message),
-            )
-        except Exception as e:
-            # Log error but don't fail
-            logger.error(f"Failed to publish event: {e}")
+            items_to_create = []
+            items_to_update = []
+            now = timezone.now()
 
-        return Response(
-            {
-                "created": created_count,
-                "updated": updated_count,
-                "skipped": skipped_count,
-                "errors": [],
-            },
-            status=status.HTTP_200_OK,
-        )
+            for key, (original_index, item_data) in deduplicated_items.items():
+                inst_id = key[0]
+                sem_id = key[1]
+                course_code = key[2]
+
+                map_key = (inst_id, sem_id, course_code)
+                if map_key in existing_map:
+                    obj = existing_map[map_key]
+                    for field, value in item_data.items():
+                        setattr(obj, field, value)
+                    obj.updated_at = now
+                    items_to_update.append(obj)
+                else:
+                    items_to_create.append(
+                        ExamSchedule(
+                            **item_data,
+                        )
+                    )
+
+            with transaction.atomic():
+                if items_to_create:
+                    ExamSchedule.objects.bulk_create(items_to_create, batch_size=100)
+                    created_count = len(items_to_create)
+
+                if items_to_update:
+                    fields_to_update = [
+                        "start_time",
+                        "end_time",
+                        "venue",
+                        "coordinator",
+                        "hrs",
+                        "raw_data",
+                        "updated_at",
+                    ]
+                    ExamSchedule.objects.bulk_update(
+                        items_to_update, fields_to_update, batch_size=100
+                    )
+                    updated_count = len(items_to_update)
+
+            return Response(
+                {
+                    "message": "Ingestion completed successfully",
+                    "created_count": created_count,
+                    "updated_count": updated_count,
+                    "skipped_count": skipped_count,
+                },
+                status=(
+                    status.HTTP_201_CREATED if created_count > 0 else status.HTTP_200_OK
+                ),
+            )
+
+        except Exception as e:
+            logger.exception(f"Failed to ingest exam schedule: {e}")
+            return Response(
+                {
+                    "error": "ingestion_failed",
+                    "errors": [
+                        {
+                            "code": "server_error",
+                            "message": str(e),
+                        }
+                    ],
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

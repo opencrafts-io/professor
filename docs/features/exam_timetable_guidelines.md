@@ -1,0 +1,81 @@
+API for providing you with your school information.
+
+---
+
+## Exam Timetable API
+
+```
+```
+### Introduction & Purpose
+
+The **Exam Timetable API** provides an interface to ingest exam schedule data and serve it directly to the Academia app.
+
+**Who is this for?**
+This endpoint is intended for institutional administrators and/or developers who need to enable exam tracking for their students. By following the data contract below, you can ensure your institution's schedules are seamlessly integrated into the Academia mobile.
+
+---
+
+### Data Contract
+
+When submitting exam schedule data via the `/api/exams/ingest/` endpoint, you **must** provide only the following fields:
+
+```json
+{
+  "items": [
+    {
+      "institution_id": "string (required, max 100 chars, non-empty)",
+      "semester": "string (optional, e.g., 'Jan26') - Used to group exams and overwrite draft timetables.",
+      "course_code": "string (required, non-empty)",
+      "start_time": "ISO 8601 datetime (required)",
+      "end_time": "ISO 8601 datetime (required)",
+      "venue": "string (required, non-empty)",
+      "coordinator": "string (optional)",
+      "hrs": "string (required)",
+      "raw_data": "object (optional, for institution-specific data)"
+    }
+  ]
+}
+```
+The semester field accepts variations (e.g., JAN26, JAN-26, JAN/26); when uploading a final exam schedule, reuse the identical semester value so the system recognizes it as an update.
+
+## Endpoint
+
+```
+POST /api/exams/ingest/
+```
+
+Submit a batch of exam schedules for ingestion.
+
+### Authentication
+
+This endpoint requires an API key. Include it as the `X-API-Key` header on every request:
+
+```http
+X-API-Key: your-api-key-here
+```
+
+Contact the administrator to obtain a valid API key. Requests without a valid key will be rejected.
+
+**Response:**
+
+```json
+{
+  "message": "Ingestion completed successfully",
+  "created_count": 150,
+  "updated_count": 25,
+  "skipped_count": 0
+}
+```
+
+**Status Codes:**
+
+| Code | Meaning |
+|------|---------|
+| `201 Created` | New records were created |
+| `200 OK` | Only updates occurred |
+| `400 Bad Request` | Invalid request payload |
+| `403 Forbidden` | Missing or invalid API key |
+| `500 Internal Server Error` | Server error during processing |
+
+---
+
