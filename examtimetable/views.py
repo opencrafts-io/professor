@@ -240,7 +240,7 @@ class IngestExamScheduleView(APIView):
         skipped_count = 0
         for i, item_data in enumerate(items_data):
             course_code = item_data["course_code"]
-            inst = item_data["institution_id"]
+            inst = item_data["institution"]
             sem = item_data.get("semester")
 
             inst_id = inst.pk if inst else None
@@ -263,7 +263,7 @@ class IngestExamScheduleView(APIView):
             institution_ids = list(
                 set(
                     [
-                        item_data["institution_id"].pk
+                        item_data["institution"].pk
                         for _, item_data in deduplicated_items.values()
                     ]
                 )
@@ -275,7 +275,7 @@ class IngestExamScheduleView(APIView):
                 course_code__in=course_codes,
             )
             existing_map = {
-                (exam.institution_id_id, exam.semester_id, exam.course_code): exam
+                (exam.institution_id, exam.semester_id, exam.course_code): exam
                 for exam in existing_exams
             }
 
