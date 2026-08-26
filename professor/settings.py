@@ -20,14 +20,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-7^6*%@5)80f-6obitpqk$$&l91(^lu19@$hway2=f=^lfv%z--"
+
+def _require_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(
+            f"{name} environment variable is not set. "
+            "Set it in your .env file or environment before starting the server."
+        )
+    return value
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv("DEBUG", False)
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
+# SECURITY WARNING: keep the secret key used in production secret!
+if DEBUG:
+    SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-dev-only-key")
+else:
+    SECRET_KEY = _require_env("SECRET_KEY")
 
 ALLOWED_HOSTS = ["*"]
 
@@ -99,12 +111,7 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", None)
 RABBITMQ_PORT = os.getenv("RABBITMQ_PORT", None)
 RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", None)
 
-INGEST_API_KEY = os.environ.get("INGEST_API_KEY")
-if not INGEST_API_KEY:
-    raise RuntimeError(
-        "INGEST_API_KEY environment variable is not set. "
-        "Set it in your .env file or environment before starting the server."
-    )
+INGEST_API_KEY = _require_env("INGEST_API_KEY")
 
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
@@ -152,9 +159,9 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.getenv("DB_NAME", "professor"),
-        "USER": os.getenv("DB_USER", "asdfghjkljsdfadfgj"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "sdfgkhldgsfASZFxgjkhfdgsxg"),
-        "HOST": os.getenv("DB_HOST", "professor-db-rw.production.svc.cluster.local"),
+        "USER": _require_env("DB_USER"),
+        "PASSWORD": _require_env("DB_PASSWORD"),
+        "HOST": _require_env("DB_HOST"),
         "PORT": os.getenv("DB_PORT", "5432"),
     }
 }
@@ -193,17 +200,10 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", None)
-assert AWS_ACCESS_KEY_ID is not None, "AWS_ACCESS_KEY_ID was not set in .env!"
-
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", None)
-assert AWS_ACCESS_KEY_ID is not None, "AWS_SECRET_ACCESS_KEY was not set in .env!"
-
-AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", None)
-assert AWS_ACCESS_KEY_ID is not None, "AWS_STORAGE_BUCKET_NAME was not set in .env!"
-
-AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", None)
-assert AWS_S3_REGION_NAME is not None, "AWS_S3_REGION_NAME was not set in .env!"
+AWS_ACCESS_KEY_ID = _require_env("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = _require_env("AWS_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = _require_env("AWS_STORAGE_BUCKET_NAME")
+AWS_S3_REGION_NAME = _require_env("AWS_S3_REGION_NAME")
 
 AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com"
 
@@ -226,8 +226,6 @@ elif ENVIRONMENT == "staging":
     STORAGE_LOCATION = "qa-professor-media"
 else:
     STORAGE_LOCATION = "dev-professor-media"
-
-print(AWS_S3_CUSTOM_DOMAIN)
 
 STORAGES = {
     "default": {
