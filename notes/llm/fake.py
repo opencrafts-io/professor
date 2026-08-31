@@ -1,0 +1,21 @@
+from .base import GenerationResult, OutputType
+
+_DEFAULT_SUMMARY = {
+    "title": "Sample summary",
+    "sections": [{"heading": "Key ideas", "points": ["point one", "point two"]}],
+}
+
+
+class FakeClient:
+    def __init__(self, responses=None, input_tokens=10, output_tokens=5):
+        self._responses = responses or {OutputType.SUMMARY: _DEFAULT_SUMMARY}
+        self._input_tokens = input_tokens
+        self._output_tokens = output_tokens
+        self.calls = []
+
+    def generate(self, pdf_bytes, output_types, context):
+        self.calls.append((list(output_types), context))
+        outputs = {t: self._responses[t] for t in output_types if t in self._responses}
+        return GenerationResult(
+            outputs=outputs, input_tokens=self._input_tokens, output_tokens=self._output_tokens
+        )
