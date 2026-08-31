@@ -112,6 +112,11 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", None)
 RABBITMQ_PORT = os.getenv("RABBITMQ_PORT", None)
 RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", None)
 
+CELERY_BROKER_URL = (
+    f"amqp://{RABBITMQ_USER}:{RABBITMQ_PASSWORD}@{RABBITMQ_HOST}:{RABBITMQ_PORT}/{RABBITMQ_VHOST or ''}"
+)
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
+
 INGEST_API_KEY = _require_env("INGEST_API_KEY")
 
 # AI feature entitlements: "stub-allow" until the Verisafe contract is captured.

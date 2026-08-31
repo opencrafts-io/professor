@@ -23,6 +23,12 @@ def auth_client(api_client, user):
 
 
 @pytest.fixture(autouse=True)
+def celery_eager(settings):
+    settings.CELERY_TASK_ALWAYS_EAGER = True
+    settings.CELERY_TASK_EAGER_PROPAGATES = True
+
+
+@pytest.fixture(autouse=True)
 def in_memory_storage(settings):
     settings.STORAGES = {
         **settings.STORAGES,
