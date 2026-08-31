@@ -114,6 +114,9 @@ RABBITMQ_VHOST = os.getenv("RABBITMQ_VHOST", None)
 
 INGEST_API_KEY = _require_env("INGEST_API_KEY")
 
+# AI feature entitlements: "stub-allow" until the Verisafe contract is captured.
+AI_ENTITLEMENT_MODE = os.getenv("AI_ENTITLEMENT_MODE", "stub-allow")
+
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 30,
