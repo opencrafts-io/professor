@@ -20,3 +20,11 @@ def user(db):
 def auth_client(api_client, user):
     api_client.force_authenticate(user=user)
     return api_client
+
+
+@pytest.fixture(autouse=True)
+def in_memory_storage(settings):
+    settings.STORAGES = {
+        **settings.STORAGES,
+        "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+    }

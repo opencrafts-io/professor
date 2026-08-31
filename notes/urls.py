@@ -1,5 +1,7 @@
 from django.urls import path
 
-from . import views  # noqa: F401  (views wired in later tasks)
+from . import views
 
-urlpatterns = []
+urlpatterns = [
+    path("", views.NoteListCreateView.as_view(), name="note-list"),
+]
