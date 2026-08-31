@@ -62,3 +62,33 @@ class NoteListCreateView(NotesAPIView):
             size_bytes=upload.size,
         )
         return Response(NoteSerializer(note).data, status=status.HTTP_201_CREATED)
+
+
+class NoteDetailView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def _get_note(self, request, pk):
+        note = Note.objects.filter(pk=pk, owner=request.user).first()
+        if note is None:
+            raise APIError("Note not found.", code=ErrorCode.NOT_FOUND, status_code=404)
+        return note
+
+    def get(self, request, pk):
+        note = self._get_note(request, pk)
+        data = NoteSerializer(note).data
+        data["artifacts"] = {
+            "summary": False,
+            "questions": [],
+            "podcast": False,
+            "study_plans": [],
+        }
+        return Response(data)
+
+    def delete(self, request, pk):
+        note = self._get_note(request, pk)
+        try:
+            note.file.delete(save=False)
+        except FileNotFoundError:
+            pass  # missing blob on delete is the desired end state
+        note.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
