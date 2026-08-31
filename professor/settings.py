@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "examtimetable",
     "users",
     "magnet",
+    "notes",
 ]
 
 
