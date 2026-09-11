@@ -36,13 +36,20 @@ def _envelope(code, message, details, http_status):
 
 def envelope_exception_handler(exc, context):
     if isinstance(exc, APIError):
-        return _envelope(exc.error_code, str(exc.detail), exc.error_details, exc.status_code)
+        return _envelope(
+            exc.error_code, str(exc.detail), exc.error_details, exc.status_code
+        )
     if isinstance(exc, ValidationError):
         return _envelope(
-            ErrorCode.VALIDATION_ERROR, "Invalid input.", exc.detail, status.HTTP_400_BAD_REQUEST
+            ErrorCode.VALIDATION_ERROR,
+            "Invalid input.",
+            exc.detail,
+            status.HTTP_400_BAD_REQUEST,
         )
     if isinstance(exc, NotFound):
-        return _envelope(ErrorCode.NOT_FOUND, str(exc.detail), {}, status.HTTP_404_NOT_FOUND)
+        return _envelope(
+            ErrorCode.NOT_FOUND, str(exc.detail), {}, status.HTTP_404_NOT_FOUND
+        )
 
     response = drf_exception_handler(exc, context)
     if response is not None:

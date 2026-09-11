@@ -13,7 +13,8 @@ def has_ai_entitlement(user_id) -> bool:
     # "verisafe" mode: real client lands when the endpoint contract is captured.
     # Fail closed until then.
     logger.warning(
-        "AI entitlement check in verisafe mode but client not wired; denying user %s", user_id
+        "AI entitlement check in verisafe mode but client not wired; denying user %s",
+        user_id,
     )
     return False
 
