@@ -72,3 +72,20 @@ class GenerationJob(models.Model):
 
     def __str__(self):
         return f"job {self.pk} [{self.status}] outputs={self.requested_outputs}"
+
+
+class Summary(models.Model):
+    note = models.ForeignKey(Note, on_delete=models.CASCADE, related_name="summaries")
+    # Artifacts outlive job pruning; the job link is for prompt-quality tracing only.
+    job = models.ForeignKey(
+        GenerationJob, on_delete=models.SET_NULL, null=True, blank=True, related_name="summaries"
+    )
+    content = models.JSONField()
+    prompt_version = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"summary {self.pk} for note {self.note_id}"
