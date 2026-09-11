@@ -16,6 +16,7 @@ class ErrorCode:
     ENTITLEMENT_REQUIRED = "entitlement_required"
     ENTITLEMENT_UNAVAILABLE = "entitlement_unavailable"
     NOT_FOUND = "not_found"
+    JOB_ALREADY_RUNNING = "job_already_running"
     INTERNAL_ERROR = "internal_error"
 
 
