@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Note
+from .models import GenerationJob, Note, Summary
 
 
 class NoteSerializer(serializers.ModelSerializer):
@@ -16,3 +16,39 @@ class NoteSerializer(serializers.ModelSerializer):
             "size_bytes",
             "uploaded_at",
         ]
+
+
+class GenerationJobSerializer(serializers.ModelSerializer):
+    note_id = serializers.IntegerField()
+    outputs = serializers.JSONField(source="requested_outputs")
+    # empty string in the DB, null on the wire (per contract)
+    failure_code = serializers.SerializerMethodField()
+    failure_message = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GenerationJob
+        fields = [
+            "id",
+            "note_id",
+            "outputs",
+            "status",
+            "failure_code",
+            "failure_message",
+            "created_at",
+            "finished_at",
+        ]
+
+    def get_failure_code(self, job):
+        return job.failure_code or None
+
+    def get_failure_message(self, job):
+        return job.failure_message or None
+
+
+class SummarySerializer(serializers.ModelSerializer):
+    note_id = serializers.IntegerField()
+    generated_at = serializers.DateTimeField(source="created_at")
+
+    class Meta:
+        model = Summary
+        fields = ["note_id", "generated_at", "content"]

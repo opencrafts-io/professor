@@ -8,7 +8,7 @@ from professor.pagination import ResultsSetPagination
 from .errors import APIError, ErrorCode, NotesAPIView
 from .llm.base import OutputType
 from .models import GenerationJob, Note
-from .serializers import NoteSerializer
+from .serializers import GenerationJobSerializer, NoteSerializer, SummarySerializer
 from .services.entitlements import HasAIEntitlement
 from .tasks import run_generation
 
@@ -83,10 +83,10 @@ class NoteDetailView(NotesAPIView):
         note = get_owned_note(request, pk)
         data = NoteSerializer(note).data
         data["artifacts"] = {
-            "summary": False,
-            "questions": [],
-            "podcast": False,
-            "study_plans": [],
+            "summary": note.summaries.exists(),
+            "questions": [],  # question sets land wk4
+            "podcast": False,  # wk5
+            "study_plans": [],  # wk6
         }
         return Response(data)
 
@@ -132,3 +132,26 @@ class NoteGenerateView(NotesAPIView):
         job = GenerationJob.objects.create(note=note, owner=request.user, requested_outputs=outputs)
         run_generation.delay(job.pk)
         return Response({"job_id": job.pk}, status=status.HTTP_202_ACCEPTED)
+
+
+class JobDetailView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def get(self, request, job_id):
+        job = GenerationJob.objects.filter(pk=job_id, owner=request.user).first()
+        if job is None:
+            raise APIError("Job not found.", code=ErrorCode.NOT_FOUND, status_code=404)
+        return Response(GenerationJobSerializer(job).data)
+
+
+class NoteSummaryView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def get(self, request, pk):
+        note = get_owned_note(request, pk)
+        summary = note.summaries.first()  # newest first per Meta ordering
+        if summary is None:
+            raise APIError(
+                "No summary exists for this note yet.", code=ErrorCode.NOT_FOUND, status_code=404
+            )
+        return Response(SummarySerializer(summary).data)
