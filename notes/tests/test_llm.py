@@ -28,3 +28,18 @@ def test_build_prompt_includes_course_and_output_block():
     )
     assert "MAT 2201" in prompt
     assert "summary" in prompt.lower()
+
+
+def test_build_prompt_appends_corrective_note():
+    context = GenerationContext(corrective_note="previous response was missing 'title'")
+    prompt = build_prompt([OutputType.SUMMARY], context)
+    assert "missing 'title'" in prompt
+
+
+def test_fake_client_plays_scripted_responses_in_order():
+    bad, good = {"title": 5}, {"title": "t", "sections": [{"heading": "h", "points": ["p"]}]}
+    client = FakeClient(script=[{OutputType.SUMMARY: bad}, {OutputType.SUMMARY: good}])
+    first = client.generate(b"%PDF-", [OutputType.SUMMARY], GenerationContext())
+    second = client.generate(b"%PDF-", [OutputType.SUMMARY], GenerationContext())
+    assert first.outputs[OutputType.SUMMARY] == bad
+    assert second.outputs[OutputType.SUMMARY] == good

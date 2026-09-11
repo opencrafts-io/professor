@@ -7,15 +7,17 @@ _DEFAULT_SUMMARY = {
 
 
 class FakeClient:
-    def __init__(self, responses=None, input_tokens=10, output_tokens=5):
+    def __init__(self, responses=None, script=None, input_tokens=10, output_tokens=5):
         self._responses = responses or {OutputType.SUMMARY: _DEFAULT_SUMMARY}
+        self._script = list(script) if script else None
         self._input_tokens = input_tokens
         self._output_tokens = output_tokens
         self.calls = []
 
     def generate(self, pdf_bytes, output_types, context):
         self.calls.append((list(output_types), context))
-        outputs = {t: self._responses[t] for t in output_types if t in self._responses}
+        responses = self._script.pop(0) if self._script else self._responses
+        outputs = {t: responses[t] for t in output_types if t in responses}
         return GenerationResult(
             outputs=outputs, input_tokens=self._input_tokens, output_tokens=self._output_tokens
         )

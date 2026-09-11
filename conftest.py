@@ -29,6 +29,12 @@ def celery_eager(settings):
 
 
 @pytest.fixture(autouse=True)
+def fake_llm_backend(settings):
+    # No test may ever reach the real Gemini API.
+    settings.AI_LLM_BACKEND = "fake"
+
+
+@pytest.fixture(autouse=True)
 def in_memory_storage(settings):
     settings.STORAGES = {
         **settings.STORAGES,

@@ -122,6 +122,11 @@ INGEST_API_KEY = _require_env("INGEST_API_KEY")
 # AI feature entitlements: "stub-allow" until the Verisafe contract is captured.
 AI_ENTITLEMENT_MODE = os.getenv("AI_ENTITLEMENT_MODE", "stub-allow")
 
+# LLM backend: "gemini" in real deployments, "fake" in tests (set by conftest).
+# Key is worker-only, so absence must not block web boot — checked at use time.
+AI_LLM_BACKEND = os.getenv("AI_LLM_BACKEND", "gemini")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 30,

@@ -33,6 +33,12 @@ class GenerationJob(models.Model):
     PENDING, PROCESSING, DONE, FAILED = "pending", "processing", "done", "failed"
     STATUS_CHOICES = [(s, s) for s in (PENDING, PROCESSING, DONE, FAILED)]
 
+    # failure_code vocabulary, surfaced verbatim through the job endpoint
+    FAILURE_FILE_UNREADABLE = "file_unreadable"
+    FAILURE_PROVIDER = "llm_provider_error"
+    FAILURE_INVALID_OUTPUT = "llm_invalid_output"
+    FAILURE_INTERNAL = "internal_error"
+
     note = models.ForeignKey(
         Note, on_delete=models.CASCADE, null=True, blank=True, related_name="jobs"
     )

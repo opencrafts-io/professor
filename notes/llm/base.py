@@ -19,6 +19,7 @@ class GenerationContext:
     course_name: str = ""
     course_code: str = ""
     question_format: str = ""
+    corrective_note: str = ""
 
 
 @dataclass
@@ -45,6 +46,8 @@ def build_prompt(output_types, context):
     ]
     if OutputType.SUMMARY in output_types:
         parts.append(_template("summary.txt"))
+    if context.corrective_note:
+        parts.append(f"IMPORTANT — your previous response was rejected: {context.corrective_note}")
     return "\n\n".join(parts)
 
 
