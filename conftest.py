@@ -30,8 +30,9 @@ def celery_eager(settings):
 
 @pytest.fixture(autouse=True)
 def fake_llm_backend(settings):
-    # No test may ever reach the real Gemini API.
+    # No test may ever reach the real Gemini or iLoveAPI services.
     settings.AI_LLM_BACKEND = "fake"
+    settings.AI_CONVERTER_BACKEND = "fake"
 
 
 @pytest.fixture(autouse=True)

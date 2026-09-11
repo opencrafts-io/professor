@@ -20,6 +20,16 @@ def get_llm_client():
     return GeminiClient(api_key=settings.GEMINI_API_KEY)
 
 
+def get_converter():
+    if settings.AI_CONVERTER_BACKEND == "fake":
+        from ..convert.fake import FakeConverter
+
+        return FakeConverter()
+    from ..convert.ilovepdf import ILovePDFConverter
+
+    return ILovePDFConverter(public_key=settings.ILOVEAPI_PUBLIC_KEY)
+
+
 def _context_for(note):
     if note.course:
         return GenerationContext(

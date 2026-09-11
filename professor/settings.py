@@ -127,6 +127,12 @@ AI_ENTITLEMENT_MODE = os.getenv("AI_ENTITLEMENT_MODE", "stub-allow")
 AI_LLM_BACKEND = os.getenv("AI_LLM_BACKEND", "gemini")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# Office->PDF conversion backend, same pattern. Secret key is reserved for
+# self-signed JWTs later (saves the auth round trip); not used yet.
+AI_CONVERTER_BACKEND = os.getenv("AI_CONVERTER_BACKEND", "ilovepdf")
+ILOVEAPI_PUBLIC_KEY = os.getenv("ILOVEAPI_PUBLIC_KEY", "")
+ILOVEAPI_SECRET_KEY = os.getenv("ILOVEAPI_SECRET_KEY", "")
+
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 30,
