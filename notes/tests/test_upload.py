@@ -21,11 +21,49 @@ def test_upload_happy_path(auth_client, user):
     assert note.file.name.startswith(f"notes/{user.user_id}/")
 
 
-def test_upload_rejects_non_pdf(auth_client):
-    fake = SimpleUploadedFile("notes.pdf", b"MZ not a pdf", content_type="application/pdf")
-    response = auth_client.post("/api/notes/", {"file": fake}, format="multipart")
+ZIP_BYTES = b"PK\x03\x04 fake office body"
+
+
+def test_upload_accepts_docx_and_keeps_extension(auth_client, user):
+    docx = SimpleUploadedFile(
+        "slides notes.docx",
+        ZIP_BYTES,
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    response = auth_client.post("/api/notes/", {"file": docx}, format="multipart")
+    assert response.status_code == 201, response.content
+    note = Note.objects.get(owner=user)
+    assert note.file.name.startswith(f"notes/{user.user_id}/")
+    assert note.file.name.endswith(".docx")
+
+
+def test_upload_accepts_pptx(auth_client):
+    pptx = SimpleUploadedFile(
+        "deck.pptx",
+        ZIP_BYTES,
+        content_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    )
+    response = auth_client.post("/api/notes/", {"file": pptx}, format="multipart")
+    assert response.status_code == 201, response.content
+
+
+def test_upload_rejects_unknown_extension(auth_client):
+    txt = SimpleUploadedFile("notes.txt", b"plain text", content_type="text/plain")
+    response = auth_client.post("/api/notes/", {"file": txt}, format="multipart")
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "note_not_pdf"
+    assert response.json()["error"]["code"] == "unsupported_file_type"
+
+
+def test_upload_rejects_content_not_matching_extension(auth_client):
+    fake_pdf = SimpleUploadedFile("notes.pdf", b"MZ not a pdf", content_type="application/pdf")
+    response = auth_client.post("/api/notes/", {"file": fake_pdf}, format="multipart")
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "unsupported_file_type"
+
+    fake_docx = SimpleUploadedFile("notes.docx", b"MZ not zip", content_type="application/msword")
+    response = auth_client.post("/api/notes/", {"file": fake_docx}, format="multipart")
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "unsupported_file_type"
 
 
 def test_upload_rejects_oversize(auth_client, settings):

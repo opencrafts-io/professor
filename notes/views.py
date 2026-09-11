@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
@@ -32,17 +34,25 @@ class NoteListCreateView(NotesAPIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         return paginator.get_paginated_response(NoteSerializer(page, many=True).data)
 
+    # extension -> required magic bytes (docx/pptx are OOXML zip containers)
+    SUPPORTED_TYPES = {".pdf": b"%PDF-", ".docx": b"PK\x03\x04", ".pptx": b"PK\x03\x04"}
+
     def post(self, request):
         upload = request.FILES.get("file")
         if upload is None:
             raise APIError(
-                "A PDF file is required.", code=ErrorCode.VALIDATION_ERROR, status_code=400
+                "A file upload is required.", code=ErrorCode.VALIDATION_ERROR, status_code=400
             )
+        ext = Path(upload.name).suffix.lower()
+        magic = self.SUPPORTED_TYPES.get(ext)
         head = upload.read(5)
         upload.seek(0)
-        if head != b"%PDF-":
+        if magic is None or not head.startswith(magic):
             raise APIError(
-                "Only PDF files are accepted.", code=ErrorCode.NOTE_NOT_PDF, status_code=400
+                "Only PDF, Word (.docx), and PowerPoint (.pptx) files are accepted.",
+                code=ErrorCode.UNSUPPORTED_FILE_TYPE,
+                status_code=400,
+                details={"supported": sorted(self.SUPPORTED_TYPES)},
             )
         max_bytes = settings.NOTES_MAX_UPLOAD_BYTES
         if upload.size > max_bytes:

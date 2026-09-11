@@ -1,4 +1,5 @@
 import uuid
+from pathlib import Path
 
 from django.db import models
 from django.utils import timezone
@@ -8,7 +9,8 @@ from users.models import User
 
 
 def note_upload_path(instance, filename):
-    return f"notes/{instance.owner.user_id}/{uuid.uuid4().hex}.pdf"
+    ext = Path(filename).suffix.lower() or ".pdf"
+    return f"notes/{instance.owner.user_id}/{uuid.uuid4().hex}{ext}"
 
 
 class Note(models.Model):

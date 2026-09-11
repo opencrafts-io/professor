@@ -11,7 +11,7 @@ logger = logging.getLogger("professor")
 
 class ErrorCode:
     VALIDATION_ERROR = "validation_error"
-    NOTE_NOT_PDF = "note_not_pdf"
+    UNSUPPORTED_FILE_TYPE = "unsupported_file_type"
     FILE_TOO_LARGE = "file_too_large"
     ENTITLEMENT_REQUIRED = "entitlement_required"
     ENTITLEMENT_UNAVAILABLE = "entitlement_unavailable"

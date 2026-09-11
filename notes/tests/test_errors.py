@@ -11,7 +11,9 @@ class BoomView(NotesAPIView):
     permission_classes = []
 
     def get(self, request):
-        raise APIError("Only PDF files are accepted.", code=ErrorCode.NOTE_NOT_PDF, status_code=400)
+        raise APIError(
+            "Unsupported file type.", code=ErrorCode.UNSUPPORTED_FILE_TYPE, status_code=400
+        )
 
 
 class ValidationView(NotesAPIView):
@@ -31,7 +33,11 @@ def test_api_error_renders_envelope():
     response = BoomView.as_view()(RequestFactory().get("/x"))
     assert response.status_code == 400
     assert _body(response) == {
-        "error": {"code": "note_not_pdf", "message": "Only PDF files are accepted.", "details": {}}
+        "error": {
+            "code": "unsupported_file_type",
+            "message": "Unsupported file type.",
+            "details": {},
+        }
     }
 
 
