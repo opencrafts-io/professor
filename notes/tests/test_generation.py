@@ -124,6 +124,71 @@ def test_context_falls_back_to_course_label(note, user):
     assert context.course_code == ""
 
 
+@pytest.fixture
+def docx_note(user):
+    note = Note(owner=user, original_filename="lecture.docx", size_bytes=9)
+    note.file.save("lecture.docx", ContentFile(b"PK\x03\x04 fake office"), save=True)
+    return note
+
+
+@pytest.fixture
+def docx_job(docx_note, user):
+    return GenerationJob.objects.create(
+        note=docx_note, owner=user, requested_outputs=["summary"]
+    )
+
+
+def test_docx_note_is_converted_and_pdf_sent_to_llm(docx_job):
+    from notes.convert.fake import FAKE_PDF, FakeConverter
+
+    client, converter = FakeClient(), FakeConverter()
+    run_generation_job(docx_job.pk, client=client, converter=converter)
+    docx_job.refresh_from_db()
+    assert docx_job.status == GenerationJob.DONE
+    assert converter.calls == ["lecture.docx"]
+    assert client.pdf_bytes_seen == [FAKE_PDF]
+    note = docx_job.note
+    note.refresh_from_db()
+    assert note.converted_file.name.endswith(".pdf")
+
+
+def test_converted_pdf_is_cached_across_jobs(docx_note, docx_job, user):
+    from notes.convert.fake import FakeConverter
+
+    run_generation_job(docx_job.pk, client=FakeClient(), converter=FakeConverter())
+    second_job = GenerationJob.objects.create(
+        note=docx_note, owner=user, requested_outputs=["summary"]
+    )
+    converter = FakeConverter()
+    run_generation_job(second_job.pk, client=FakeClient(), converter=converter)
+    second_job.refresh_from_db()
+    assert second_job.status == GenerationJob.DONE
+    assert converter.calls == []
+
+
+def test_conversion_failure_fails_job_without_llm_call(docx_job):
+    from notes.convert.base import ConversionError
+    from notes.convert.fake import FakeConverter
+
+    client = FakeClient()
+    converter = FakeConverter(error=ConversionError("upstream down"))
+    run_generation_job(docx_job.pk, client=client, converter=converter)
+    docx_job.refresh_from_db()
+    assert docx_job.status == GenerationJob.FAILED
+    assert docx_job.failure_code == GenerationJob.FAILURE_CONVERSION
+    assert client.calls == []
+
+
+def test_pdf_note_never_touches_converter(job):
+    from notes.convert.fake import FakeConverter
+
+    converter = FakeConverter()
+    run_generation_job(job.pk, client=FakeClient(), converter=converter)
+    job.refresh_from_db()
+    assert job.status == GenerationJob.DONE
+    assert converter.calls == []
+
+
 def test_worker_task_runs_job_via_settings_backend(job, settings):
     settings.AI_LLM_BACKEND = "fake"
     from notes.tasks import run_generation

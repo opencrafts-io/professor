@@ -102,10 +102,13 @@ class NoteDetailView(NotesAPIView):
 
     def delete(self, request, pk):
         note = get_owned_note(request, pk)
-        try:
-            note.file.delete(save=False)
-        except FileNotFoundError:
-            pass  # missing blob on delete is the desired end state
+        for blob in (note.file, note.converted_file):
+            if not blob:
+                continue
+            try:
+                blob.delete(save=False)
+            except FileNotFoundError:
+                pass  # missing blob on delete is the desired end state
         note.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

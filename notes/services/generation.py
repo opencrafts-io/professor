@@ -3,7 +3,9 @@ import logging
 import time
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 
+from ..convert.base import ConversionError
 from ..llm.base import PROMPT_VERSION, GenerationContext, OutputType, validate_summary
 from ..models import GenerationJob, Summary
 
@@ -46,7 +48,22 @@ def _validate_outputs(result, output_types):
     return problems
 
 
-def run_generation_job(job_id, client=None):
+def _pdf_bytes_for(note, converter):
+    if note.file.name.lower().endswith(".pdf"):
+        with note.file.open("rb") as f:
+            return f.read()
+    if note.converted_file:
+        with note.converted_file.open("rb") as f:
+            return f.read()
+    with note.file.open("rb") as f:
+        source_bytes = f.read()
+    converter = converter or get_converter()
+    pdf_bytes = converter.to_pdf(source_bytes, note.original_filename)
+    note.converted_file.save("converted.pdf", ContentFile(pdf_bytes), save=True)
+    return pdf_bytes
+
+
+def run_generation_job(job_id, client=None, converter=None):
     job = GenerationJob.objects.select_related("note", "note__course").filter(pk=job_id).first()
     if job is None or job.status in (GenerationJob.DONE, GenerationJob.FAILED):
         logger.warning("generation job %s skipped (missing or already finished)", job_id)
@@ -56,8 +73,10 @@ def run_generation_job(job_id, client=None):
     job.save(update_fields=["prompt_version"])
 
     try:
-        with job.note.file.open("rb") as f:
-            pdf_bytes = f.read()
+        pdf_bytes = _pdf_bytes_for(job.note, converter)
+    except ConversionError as exc:
+        _fail(job, GenerationJob.FAILURE_CONVERSION, str(exc))
+        return
     except (OSError, ValueError) as exc:
         _fail(job, GenerationJob.FAILURE_FILE_UNREADABLE, str(exc))
         return

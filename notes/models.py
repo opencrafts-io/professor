@@ -20,6 +20,8 @@ class Note(models.Model):
     )
     course_label = models.CharField(max_length=255, blank=True, default="")
     file = models.FileField(upload_to=note_upload_path)
+    # PDF rendition of a docx/pptx upload, produced once by the worker; empty for PDFs.
+    converted_file = models.FileField(upload_to=note_upload_path, blank=True)
     original_filename = models.CharField(max_length=255)
     size_bytes = models.BigIntegerField()
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -37,6 +39,7 @@ class GenerationJob(models.Model):
 
     # failure_code vocabulary, surfaced verbatim through the job endpoint
     FAILURE_FILE_UNREADABLE = "file_unreadable"
+    FAILURE_CONVERSION = "conversion_failed"
     FAILURE_PROVIDER = "llm_provider_error"
     FAILURE_INVALID_OUTPUT = "llm_invalid_output"
     FAILURE_INTERNAL = "internal_error"

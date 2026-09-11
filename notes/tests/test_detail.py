@@ -38,3 +38,15 @@ def test_delete_removes_note(auth_client, note):
     response = auth_client.delete(f"/api/notes/{note.pk}/")
     assert response.status_code == 204
     assert not Note.objects.filter(pk=note.pk).exists()
+
+
+def test_delete_removes_converted_blob_too(auth_client, user):
+    from django.core.files.base import ContentFile
+
+    note = Note(owner=user, original_filename="a.docx", size_bytes=1)
+    note.file.save("a.docx", ContentFile(b"PK\x03\x04 x"), save=True)
+    note.converted_file.save("a.pdf", ContentFile(b"%PDF-1.4 x"), save=True)
+    storage, converted_name = note.converted_file.storage, note.converted_file.name
+    response = auth_client.delete(f"/api/notes/{note.pk}/")
+    assert response.status_code == 204
+    assert not storage.exists(converted_name)
