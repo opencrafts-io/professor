@@ -215,6 +215,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 *.txt
+!notes/llm/prompts/
+!notes/llm/prompts/*.txt
 
 
 # folder which timetables are uploaded for tests

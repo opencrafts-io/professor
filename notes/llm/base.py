@@ -3,7 +3,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
