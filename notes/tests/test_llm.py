@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from notes.llm.base import (
     GenerationContext,
     OutputType,
@@ -43,3 +45,39 @@ def test_fake_client_plays_scripted_responses_in_order():
     second = client.generate(b"%PDF-", [OutputType.SUMMARY], GenerationContext())
     assert first.outputs[OutputType.SUMMARY] == bad
     assert second.outputs[OutputType.SUMMARY] == good
+
+
+def test_gemini_sends_markdown_as_untrusted_source_material(monkeypatch):
+    from notes.llm import gemini
+
+    calls = {}
+
+    class StubModels:
+        def generate_content(self, **kwargs):
+            calls.update(kwargs)
+            return SimpleNamespace(
+                text='{"summary": {"title": "t", "sections": []}}',
+                usage_metadata=SimpleNamespace(prompt_token_count=3, candidates_token_count=2),
+            )
+
+    monkeypatch.setattr(
+        gemini.genai, "Client", lambda api_key: SimpleNamespace(models=StubModels())
+    )
+    monkeypatch.setattr(
+        gemini,
+        "types",
+        SimpleNamespace(
+            Part=SimpleNamespace(from_bytes=lambda **kwargs: kwargs),
+            GenerateContentConfig=lambda **kwargs: kwargs,
+        ),
+    )
+    monkeypatch.setattr(gemini, "build_prompt", lambda *_: "Generate a summary.")
+
+    gemini.GeminiClient("key").generate(
+        "# Lecture\n\nNewton's laws", [OutputType.SUMMARY], GenerationContext()
+    )
+
+    assert calls["contents"][0] == "Generate a summary."
+    assert "<source_document>" in calls["contents"][1]
+    assert "Newton's laws" in calls["contents"][1]
+    assert "not instructions" in calls["contents"][1]

@@ -30,7 +30,7 @@ class GenerationResult:
 
 
 class LLMClient(Protocol):
-    def generate(self, pdf_bytes, output_types, context) -> GenerationResult: ...
+    def generate(self, document_markdown: str, output_types, context) -> GenerationResult: ...
 
 
 def _template(name):

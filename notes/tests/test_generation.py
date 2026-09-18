@@ -138,58 +138,63 @@ def docx_job(docx_note, user):
     )
 
 
-def test_docx_note_is_converted_and_pdf_sent_to_llm(docx_job):
-    from notes.convert.fake import FAKE_PDF, FakeConverter
+def test_document_is_converted_to_markdown_and_sent_to_llm(docx_job):
+    class MarkdownConverter:
+        def __init__(self):
+            self.calls = []
 
-    client, converter = FakeClient(), FakeConverter()
-    run_generation_job(docx_job.pk, client=client, converter=converter)
+        def to_markdown(self, file_bytes, filename):
+            self.calls.append((file_bytes, filename))
+            return "# Lecture\n\nNewton's laws"
+
+    client = FakeClient()
+    converter = MarkdownConverter()
+    run_generation_job(docx_job.pk, client=client, markdown_converter=converter)
+
     docx_job.refresh_from_db()
     assert docx_job.status == GenerationJob.DONE
-    assert converter.calls == ["lecture.docx"]
-    assert client.pdf_bytes_seen == [FAKE_PDF]
-    note = docx_job.note
-    note.refresh_from_db()
-    assert note.converted_file.name.endswith(".pdf")
+    assert converter.calls == [(b"PK\x03\x04 fake office", "lecture.docx")]
+    assert client.document_text_seen == ["# Lecture\n\nNewton's laws"]
 
 
-def test_converted_pdf_is_cached_across_jobs(docx_note, docx_job, user):
-    from notes.convert.fake import FakeConverter
+def test_document_ingestion_has_no_pdf_fallback():
+    from io import BytesIO
 
-    run_generation_job(docx_job.pk, client=FakeClient(), converter=FakeConverter())
-    second_job = GenerationJob.objects.create(
-        note=docx_note, owner=user, requested_outputs=["summary"]
-    )
-    converter = FakeConverter()
-    run_generation_job(second_job.pk, client=FakeClient(), converter=converter)
-    second_job.refresh_from_db()
-    assert second_job.status == GenerationJob.DONE
-    assert converter.calls == []
+    from notes.services.generation import _document_for
+
+    class SourceFile:
+        name = "lecture.docx"
+
+        def open(self, mode):
+            return BytesIO(b"PK\x03\x04 fake office")
+
+    class Note:
+        file = SourceFile()
+        original_filename = "lecture.docx"
+
+    class MarkdownConverter:
+        def to_markdown(self, file_bytes, filename):
+            return "# Lecture"
+
+    assert _document_for(Note(), MarkdownConverter()) == "# Lecture"
 
 
 def test_conversion_failure_fails_job_without_llm_call(docx_job):
     from notes.convert.base import ConversionError
-    from notes.convert.fake import FakeConverter
+
+    class MarkdownConverter:
+        def to_markdown(self, file_bytes, filename):
+            raise ConversionError("conversion failed")
 
     client = FakeClient()
-    converter = FakeConverter(error=ConversionError("upstream down"))
-    run_generation_job(docx_job.pk, client=client, converter=converter)
+    run_generation_job(docx_job.pk, client=client, markdown_converter=MarkdownConverter())
     docx_job.refresh_from_db()
     assert docx_job.status == GenerationJob.FAILED
     assert docx_job.failure_code == GenerationJob.FAILURE_CONVERSION
     assert client.calls == []
 
 
-def test_pdf_note_never_touches_converter(job):
-    from notes.convert.fake import FakeConverter
-
-    converter = FakeConverter()
-    run_generation_job(job.pk, client=FakeClient(), converter=converter)
-    job.refresh_from_db()
-    assert job.status == GenerationJob.DONE
-    assert converter.calls == []
-
-
-def test_worker_task_runs_job_via_settings_backend(job, settings):
+def test_worker_task_runs_job(job, settings):
     settings.AI_LLM_BACKEND = "fake"
     from notes.tasks import run_generation
 

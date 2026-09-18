@@ -20,8 +20,6 @@ class Note(models.Model):
     )
     course_label = models.CharField(max_length=255, blank=True, default="")
     file = models.FileField(upload_to=note_upload_path)
-    # PDF rendition of a docx/pptx upload, produced once by the worker; empty for PDFs.
-    converted_file = models.FileField(upload_to=note_upload_path, blank=True)
     original_filename = models.CharField(max_length=255)
     size_bytes = models.BigIntegerField()
     uploaded_at = models.DateTimeField(auto_now_add=True)
