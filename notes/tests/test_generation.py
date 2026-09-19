@@ -1,11 +1,13 @@
 import pytest
 from django.core.files.base import ContentFile
 
-from courses.models import Course, SemesterInfo
+from courses.models import StudentCourse
+from institutions.models import Institution
 from notes.llm.base import PROMPT_VERSION, OutputType
 from notes.llm.fake import FakeClient
 from notes.models import GenerationJob, Note
 from notes.services.generation import run_generation_job
+from users.models import StudentProfile
 
 GOOD = {"title": "t", "sections": [{"heading": "h", "points": ["p"]}]}
 BAD = {"title": 5}
@@ -98,11 +100,18 @@ def test_finished_job_is_not_rerun(job):
 
 
 def test_context_uses_course_fields_when_linked(note, user):
-    semester = SemesterInfo.objects.create(
-        code="S1", name="Sem 1", start_date="2026-09-01", end_date="2026-12-15"
+    institution = Institution.objects.create(
+        name="Academia University",
+        web_pages=["https://academia.example"],
+        domains=["academia.example"],
+        country="Kenya",
     )
-    note.course = Course.objects.create(
-        course_code="MAT 2201", course_name="Engineering Mathematics II", semester=semester
+    student = StudentProfile.objects.create(user=user, student_id="student-001")
+    note.course = StudentCourse.objects.create(
+        student=student,
+        institution=institution,
+        code="MAT 2201",
+        title="Engineering Mathematics II",
     )
     note.save()
     job = GenerationJob.objects.create(note=note, owner=user, requested_outputs=["summary"])
