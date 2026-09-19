@@ -29,7 +29,7 @@ def get_markdown_converter():
 def _context_for(note):
     if note.course:
         return GenerationContext(
-            course_name=note.course.course_name, course_code=note.course.course_code
+            course_name=note.course.title, course_code=note.course.code
         )
     return GenerationContext(course_name=note.course_label)
 

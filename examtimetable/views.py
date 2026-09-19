@@ -9,7 +9,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from courses.models import SemesterInfo, StudentCourseEnrollment
+from courses.models import SemesterInfo, StudentCourse
 
 from .auth import IngestAPIKeyPermission
 from professor.pagination import ResultsSetPagination
@@ -44,17 +44,16 @@ class StudentExamScheduleView(APIView):
                 {"error": "Student not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-        enrollments = StudentCourseEnrollment.objects.filter(student=student)
+        courses = StudentCourse.objects.filter(student=student, archived_at__isnull=True)
         if semester_id:
             try:
-                semester = SemesterInfo.objects.get(id=semester_id)
-                enrollments = enrollments.filter(semester=semester)
+                SemesterInfo.objects.get(id=semester_id)
             except SemesterInfo.DoesNotExist:
                 return Response(
                     {"error": "Semester not found"}, status=status.HTTP_404_NOT_FOUND
                 )
 
-        course_codes = [enrollment.course.course_code for enrollment in enrollments]
+        course_codes = courses.values_list("code", flat=True)
 
         exams = ExamSchedule.objects.filter(course_code__in=course_codes)
         if semester_id:

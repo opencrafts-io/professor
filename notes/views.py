@@ -4,7 +4,7 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
 
-from courses.models import Course
+from courses.models import StudentCourse
 from professor.pagination import ResultsSetPagination
 
 from .errors import APIError, ErrorCode, NotesAPIView
@@ -72,7 +72,7 @@ class NoteListCreateView(NotesAPIView):
         course = None
         course_id = request.data.get("course_id")
         if course_id:
-            course = Course.objects.filter(pk=course_id).first()
+            course = StudentCourse.objects.filter(pk=course_id).first()
             if course is None:
                 raise APIError(
                     "Unknown course_id.",

@@ -93,7 +93,9 @@ def test_upload_denied_without_entitlement(auth_client, settings):
 
 def test_upload_rejects_unknown_course(auth_client):
     response = auth_client.post(
-        "/api/notes/", {"file": _pdf(), "course_id": 999999}, format="multipart"
+        "/api/notes/",
+        {"file": _pdf(), "course_id": "00000000-0000-0000-0000-000000000000"},
+        format="multipart",
     )
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "validation_error"

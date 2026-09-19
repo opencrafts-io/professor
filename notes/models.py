@@ -4,7 +4,7 @@ from pathlib import Path
 from django.db import models
 from django.utils import timezone
 
-from courses.models import Course
+from courses.models import StudentCourse
 from users.models import User
 
 
@@ -16,7 +16,7 @@ def note_upload_path(instance, filename):
 class Note(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notes")
     course = models.ForeignKey(
-        Course, on_delete=models.SET_NULL, null=True, blank=True, related_name="notes"
+        StudentCourse, on_delete=models.SET_NULL, null=True, blank=True, related_name="notes"
     )
     course_label = models.CharField(max_length=255, blank=True, default="")
     file = models.FileField(upload_to=note_upload_path)
