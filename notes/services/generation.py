@@ -4,7 +4,13 @@ import time
 
 from django.conf import settings
 from ..convert.base import ConversionError
-from ..llm.base import PROMPT_VERSION, GenerationContext, OutputType, validate_summary
+from ..llm.base import (
+    PROMPT_VERSION,
+    DocumentSource,
+    GenerationContext,
+    OutputType,
+    validate_summary,
+)
 from ..models import GenerationJob, Summary
 
 logger = logging.getLogger("professor")
@@ -53,7 +59,17 @@ def _markdown_for(note, markdown_converter):
 
 
 def _document_for(note, markdown_converter):
-    return _markdown_for(note, markdown_converter)
+    try:
+        return DocumentSource(markdown=_markdown_for(note, markdown_converter))
+    except ConversionError as exc:
+        # Scanned/image PDFs yield no usable text; Gemini reads them natively.
+        if not note.file.name.lower().endswith(".pdf"):
+            raise
+        logger.warning(
+            "note %s markdown extraction failed (%s); falling back to native pdf", note.pk, exc
+        )
+        with note.file.open("rb") as f:
+            return DocumentSource(pdf_bytes=f.read())
 
 
 def run_generation_job(job_id, client=None, markdown_converter=None):

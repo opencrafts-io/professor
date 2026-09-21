@@ -14,10 +14,14 @@ class FakeClient:
         self._output_tokens = output_tokens
         self.calls = []
         self.document_text_seen = []
+        self.document_pdf_seen = []
 
-    def generate(self, document_markdown, output_types, context):
+    def generate(self, document, output_types, context):
         self.calls.append((list(output_types), context))
-        self.document_text_seen.append(document_markdown)
+        if document.markdown:
+            self.document_text_seen.append(document.markdown)
+        if document.pdf_bytes:
+            self.document_pdf_seen.append(document.pdf_bytes)
         responses = self._script.pop(0) if self._script else self._responses
         outputs = {t: responses[t] for t in output_types if t in responses}
         return GenerationResult(

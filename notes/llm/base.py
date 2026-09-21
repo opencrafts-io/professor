@@ -29,8 +29,16 @@ class GenerationResult:
     output_tokens: int = 0
 
 
+@dataclass(frozen=True)
+class DocumentSource:
+    """Markdown when extraction worked; raw PDF bytes as the vision fallback."""
+
+    markdown: str = ""
+    pdf_bytes: bytes = b""
+
+
 class LLMClient(Protocol):
-    def generate(self, document_markdown: str, output_types, context) -> GenerationResult: ...
+    def generate(self, document: DocumentSource, output_types, context) -> GenerationResult: ...
 
 
 def _template(name):

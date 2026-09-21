@@ -12,10 +12,13 @@ class GeminiClient:
         self._client = genai.Client(api_key=api_key)
         self._model = model
 
-    def generate(self, document_markdown, output_types, context):
-        source = """<source_document>
+    def generate(self, document, output_types, context):
+        if document.markdown:
+            source = """<source_document>
 %s
-</source_document>""" % document_markdown
+</source_document>""" % document.markdown
+        else:
+            source = types.Part.from_bytes(data=document.pdf_bytes, mime_type="application/pdf")
         response = self._client.models.generate_content(
             model=self._model,
             contents=[source],

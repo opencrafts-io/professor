@@ -166,26 +166,20 @@ def test_document_is_converted_to_markdown_and_sent_to_llm(docx_job):
     assert client.document_text_seen == ["# Lecture\n\nNewton's laws"]
 
 
-def test_document_ingestion_has_no_pdf_fallback():
-    from io import BytesIO
+def test_pdf_falls_back_to_native_bytes_when_extraction_fails(job):
+    from notes.convert.base import ConversionError
 
-    from notes.services.generation import _document_for
-
-    class SourceFile:
-        name = "lecture.docx"
-
-        def open(self, mode):
-            return BytesIO(b"PK\x03\x04 fake office")
-
-    class Note:
-        file = SourceFile()
-        original_filename = "lecture.docx"
-
-    class MarkdownConverter:
+    class FailingConverter:
         def to_markdown(self, file_bytes, filename):
-            return "# Lecture"
+            raise ConversionError("Document contains no extractable text.")
 
-    assert _document_for(Note(), MarkdownConverter()) == "# Lecture"
+    client = FakeClient()
+    run_generation_job(job.pk, client=client, markdown_converter=FailingConverter())
+    job.refresh_from_db()
+    assert job.status == GenerationJob.DONE
+    assert client.document_pdf_seen == [b"%PDF-fake"]
+    assert client.document_text_seen == []
+    assert job.note.summaries.exists()
 
 
 def test_conversion_failure_fails_job_without_llm_call(docx_job):

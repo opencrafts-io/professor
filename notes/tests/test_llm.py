@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from notes.llm.base import (
+    DocumentSource,
     GenerationContext,
     OutputType,
     build_prompt,
@@ -11,7 +12,9 @@ from notes.llm.fake import FakeClient
 
 def test_fake_client_returns_valid_summary():
     client = FakeClient()
-    result = client.generate(b"%PDF-", [OutputType.SUMMARY], GenerationContext(course_name="Math"))
+    result = client.generate(
+        DocumentSource(markdown="# notes"), [OutputType.SUMMARY], GenerationContext(course_name="Math")
+    )
     summary = result.outputs[OutputType.SUMMARY]
     assert validate_summary(summary) == []
     assert result.input_tokens > 0
@@ -43,8 +46,9 @@ def test_build_prompt_appends_corrective_note():
 def test_fake_client_plays_scripted_responses_in_order():
     bad, good = {"title": 5}, {"title": "t", "sections": [{"heading": "h", "points": ["p"]}]}
     client = FakeClient(script=[{OutputType.SUMMARY: bad}, {OutputType.SUMMARY: good}])
-    first = client.generate(b"%PDF-", [OutputType.SUMMARY], GenerationContext())
-    second = client.generate(b"%PDF-", [OutputType.SUMMARY], GenerationContext())
+    doc = DocumentSource(markdown="# notes")
+    first = client.generate(doc, [OutputType.SUMMARY], GenerationContext())
+    second = client.generate(doc, [OutputType.SUMMARY], GenerationContext())
     assert first.outputs[OutputType.SUMMARY] == bad
     assert second.outputs[OutputType.SUMMARY] == good
 
@@ -73,15 +77,51 @@ def test_gemini_separates_system_instruction_from_source_material(settings, monk
         ),
     )
     monkeypatch.setattr(gemini, "build_prompt", lambda *_: "Generate a summary.")
-    settings.GEMINI_MAX_OUTPUT_TOKENS = 600
 
     gemini.GeminiClient("key").generate(
-        "# Lecture\n\nNewton's laws", [OutputType.SUMMARY], GenerationContext()
+        DocumentSource(markdown="# Lecture\n\nNewton's laws"),
+        [OutputType.SUMMARY],
+        GenerationContext(),
     )
 
     assert calls["config"]["system_instruction"] == "Generate a summary."
-    assert calls["config"]["max_output_tokens"] == 600
     assert calls["config"]["response_mime_type"] == "application/json"
     assert len(calls["contents"]) == 1
     assert "<source_document>" in calls["contents"][0]
     assert "Newton's laws" in calls["contents"][0]
+
+
+def test_gemini_sends_native_pdf_when_document_has_no_markdown(monkeypatch):
+    from notes.llm import gemini
+
+    calls = {}
+
+    class StubModels:
+        def generate_content(self, **kwargs):
+            calls.update(kwargs)
+            return SimpleNamespace(
+                text='{"summary": {"title": "t", "sections": []}}',
+                usage_metadata=SimpleNamespace(prompt_token_count=3, candidates_token_count=2),
+            )
+
+    monkeypatch.setattr(
+        gemini.genai, "Client", lambda api_key: SimpleNamespace(models=StubModels())
+    )
+    monkeypatch.setattr(
+        gemini,
+        "types",
+        SimpleNamespace(
+            GenerateContentConfig=lambda **kwargs: kwargs,
+            Part=SimpleNamespace(
+                from_bytes=lambda *, data, mime_type: ("part", mime_type, data)
+            ),
+        ),
+    )
+    monkeypatch.setattr(gemini, "build_prompt", lambda *_: "Generate a summary.")
+
+    gemini.GeminiClient("key").generate(
+        DocumentSource(pdf_bytes=b"%PDF-scanned"), [OutputType.SUMMARY], GenerationContext()
+    )
+
+    assert calls["contents"] == [("part", "application/pdf", b"%PDF-scanned")]
+    assert calls["config"]["system_instruction"] == "Generate a summary."
