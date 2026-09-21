@@ -235,6 +235,62 @@ def test_conversion_failure_fails_job_without_llm_call(docx_job):
     assert client.calls == []
 
 
+FLASHCARDS = [{"front": "What is inertia?", "back": "Resistance to change in motion"}]
+
+
+def test_questions_job_persists_question_set(note, user):
+    from notes.models import QuestionSet
+
+    job = GenerationJob.objects.create(
+        note=note, owner=user, requested_outputs=["questions"], question_format="flashcard"
+    )
+    client = FakeClient(responses={OutputType.QUESTIONS: FLASHCARDS})
+    run_generation_job(job.pk, client=client)
+    job.refresh_from_db()
+    assert job.status == GenerationJob.DONE
+    _, context = client.calls[0]
+    assert context.question_format == "flashcard"
+    question_set = QuestionSet.objects.get(note=note)
+    assert question_set.format == "flashcard"
+    assert question_set.questions == FLASHCARDS
+    assert question_set.job == job
+
+
+def test_bundled_outputs_use_one_llm_call(note, user):
+    from notes.models import QuestionSet
+
+    job = GenerationJob.objects.create(
+        note=note,
+        owner=user,
+        requested_outputs=["summary", "questions"],
+        question_format="flashcard",
+    )
+    client = FakeClient(
+        responses={OutputType.SUMMARY: GOOD, OutputType.QUESTIONS: FLASHCARDS}
+    )
+    run_generation_job(job.pk, client=client)
+    job.refresh_from_db()
+    assert job.status == GenerationJob.DONE
+    assert len(client.calls) == 1
+    assert note.summaries.count() == 1
+    assert QuestionSet.objects.filter(note=note).count() == 1
+
+
+def test_invalid_questions_fail_after_corrective_retry(note, user):
+    job = GenerationJob.objects.create(
+        note=note, owner=user, requested_outputs=["questions"], question_format="flashcard"
+    )
+    bad = [{"front": "no back side"}]
+    client = FakeClient(
+        script=[{OutputType.QUESTIONS: bad}, {OutputType.QUESTIONS: bad}]
+    )
+    run_generation_job(job.pk, client=client)
+    job.refresh_from_db()
+    assert job.status == GenerationJob.FAILED
+    assert job.failure_code == GenerationJob.FAILURE_INVALID_OUTPUT
+    assert len(client.calls) == 2
+
+
 def test_worker_task_runs_job(job, settings):
     settings.AI_LLM_BACKEND = "fake"
     from notes.tasks import run_generation

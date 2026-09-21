@@ -8,14 +8,14 @@ from courses.models import StudentCourse
 from professor.pagination import ResultsSetPagination
 
 from .errors import APIError, ErrorCode, NotesAPIView
-from .llm.base import OutputType
+from .llm.base import QUESTION_FORMATS, OutputType
 from .models import GenerationJob, Note
 from .serializers import GenerationJobSerializer, NoteSerializer, SummarySerializer
 from .services.entitlements import HasAIEntitlement
 from .tasks import run_generation
 
-# generation grows to questions (wk4) and podcast (wk5)
-IMPLEMENTED_OUTPUTS = {OutputType.SUMMARY.value}
+# generation grows to podcast (wk5) and study plans (wk6)
+IMPLEMENTED_OUTPUTS = {OutputType.SUMMARY.value, OutputType.QUESTIONS.value}
 
 
 def get_owned_note(request, pk):
@@ -136,6 +136,17 @@ class NoteGenerateView(NotesAPIView):
                 status_code=400,
                 details={"unsupported": unsupported, "supported": sorted(IMPLEMENTED_OUTPUTS)},
             )
+        question_format = request.data.get("question_format", "")
+        if OutputType.QUESTIONS.value in outputs:
+            if question_format not in QUESTION_FORMATS:
+                raise APIError(
+                    "'question_format' is required with questions.",
+                    code=ErrorCode.VALIDATION_ERROR,
+                    status_code=400,
+                    details={"allowed": list(QUESTION_FORMATS)},
+                )
+        else:
+            question_format = ""
         in_flight = note.jobs.filter(
             status__in=[GenerationJob.PENDING, GenerationJob.PROCESSING]
         ).exists()
@@ -145,7 +156,12 @@ class NoteGenerateView(NotesAPIView):
                 code=ErrorCode.JOB_ALREADY_RUNNING,
                 status_code=409,
             )
-        job = GenerationJob.objects.create(note=note, owner=request.user, requested_outputs=outputs)
+        job = GenerationJob.objects.create(
+            note=note,
+            owner=request.user,
+            requested_outputs=outputs,
+            question_format=question_format,
+        )
         run_generation.delay(job.pk)
         return Response({"job_id": job.pk}, status=status.HTTP_202_ACCEPTED)
 

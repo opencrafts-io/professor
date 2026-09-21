@@ -39,9 +39,48 @@ def test_generate_rejects_unknown_output(auth_client, note):
 
 
 def test_generate_rejects_not_yet_supported_output(auth_client, note):
+    response = auth_client.post(generate_url(note), {"outputs": ["podcast_script"]}, format="json")
+    assert response.status_code == 400
+    assert response.data["error"]["code"] == "validation_error"
+
+
+def test_generate_questions_requires_format(auth_client, note):
     response = auth_client.post(generate_url(note), {"outputs": ["questions"]}, format="json")
     assert response.status_code == 400
     assert response.data["error"]["code"] == "validation_error"
+
+    response = auth_client.post(
+        generate_url(note),
+        {"outputs": ["questions"], "question_format": "essay"},
+        format="json",
+    )
+    assert response.status_code == 400
+
+
+def test_generate_questions_runs_to_question_set(auth_client, note):
+    from notes.models import QuestionSet
+
+    response = auth_client.post(
+        generate_url(note),
+        {"outputs": ["questions"], "question_format": "flashcard"},
+        format="json",
+    )
+    assert response.status_code == 202
+    job = GenerationJob.objects.get(pk=response.data["job_id"])
+    assert job.question_format == "flashcard"
+    assert job.status == GenerationJob.DONE
+    assert QuestionSet.objects.filter(note=note, format="flashcard").exists()
+
+
+def test_generate_ignores_question_format_without_questions(auth_client, note):
+    response = auth_client.post(
+        generate_url(note),
+        {"outputs": ["summary"], "question_format": "mcq"},
+        format="json",
+    )
+    assert response.status_code == 202
+    job = GenerationJob.objects.get(pk=response.data["job_id"])
+    assert job.question_format == ""
 
 
 def test_generate_conflicts_while_job_in_flight(auth_client, note, user):

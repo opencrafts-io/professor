@@ -9,9 +9,10 @@ from ..llm.base import (
     DocumentSource,
     GenerationContext,
     OutputType,
+    validate_questions,
     validate_summary,
 )
-from ..models import GenerationJob, Summary
+from ..models import GenerationJob, QuestionSet, Summary
 
 logger = logging.getLogger("professor")
 
@@ -32,19 +33,29 @@ def get_markdown_converter():
     return MarkItDownConverter()
 
 
-def _context_for(note):
+def _context_for(job):
+    note = job.note
     if note.course:
         return GenerationContext(
-            course_name=note.course.title, course_code=note.course.code
+            course_name=note.course.title,
+            course_code=note.course.code,
+            question_format=job.question_format,
         )
-    return GenerationContext(course_name=note.course_label)
+    return GenerationContext(
+        course_name=note.course_label, question_format=job.question_format
+    )
 
 
-def _validate_outputs(result, output_types):
+def _validate_outputs(result, output_types, question_format):
     problems = []
     if OutputType.SUMMARY in output_types:
         summary_problems = validate_summary(result.outputs.get(OutputType.SUMMARY))
         problems.extend(f"summary: {p}" for p in summary_problems)
+    if OutputType.QUESTIONS in output_types:
+        question_problems = validate_questions(
+            result.outputs.get(OutputType.QUESTIONS), question_format
+        )
+        problems.extend(f"questions: {p}" for p in question_problems)
     return problems
 
 
@@ -97,7 +108,7 @@ def run_generation_job(job_id, client=None, markdown_converter=None):
 
     client = client or get_llm_client()
     output_types = [OutputType(o) for o in job.requested_outputs]
-    context = _context_for(job.note)
+    context = _context_for(job)
 
     input_tokens = output_tokens = 0
     started = time.monotonic()
@@ -109,7 +120,7 @@ def run_generation_job(job_id, client=None, markdown_converter=None):
             return
         input_tokens += result.input_tokens
         output_tokens += result.output_tokens
-        problems = _validate_outputs(result, output_types)
+        problems = _validate_outputs(result, output_types, job.question_format)
         if not problems:
             break
         if attempt == 0:
@@ -123,6 +134,14 @@ def run_generation_job(job_id, client=None, markdown_converter=None):
             note=job.note,
             job=job,
             content=result.outputs[OutputType.SUMMARY],
+            prompt_version=PROMPT_VERSION,
+        )
+    if OutputType.QUESTIONS in output_types:
+        QuestionSet.objects.create(
+            note=job.note,
+            job=job,
+            format=job.question_format,
+            questions=result.outputs[OutputType.QUESTIONS],
             prompt_version=PROMPT_VERSION,
         )
     job.mark_done(input_tokens=input_tokens, output_tokens=output_tokens)

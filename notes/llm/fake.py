@@ -5,10 +5,15 @@ _DEFAULT_SUMMARY = {
     "sections": [{"heading": "Key ideas", "points": ["point one", "point two"]}],
 }
 
+_DEFAULT_QUESTIONS = [{"front": "What is sampled?", "back": "A fake flashcard."}]
+
 
 class FakeClient:
     def __init__(self, responses=None, script=None, input_tokens=10, output_tokens=5):
-        self._responses = responses or {OutputType.SUMMARY: _DEFAULT_SUMMARY}
+        self._responses = responses or {
+            OutputType.SUMMARY: _DEFAULT_SUMMARY,
+            OutputType.QUESTIONS: _DEFAULT_QUESTIONS,
+        }
         self._script = list(script) if script else None
         self._input_tokens = input_tokens
         self._output_tokens = output_tokens
