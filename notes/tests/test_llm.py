@@ -86,6 +86,9 @@ def test_gemini_separates_system_instruction_from_source_material(settings, monk
 
     assert calls["config"]["system_instruction"] == "Generate a summary."
     assert calls["config"]["response_mime_type"] == "application/json"
+    # No output cap: truncated JSON would fail parsing and misreport as a provider
+    # error; each output type's prompt bounds its own size instead.
+    assert "max_output_tokens" not in calls["config"]
     assert len(calls["contents"]) == 1
     assert "<source_document>" in calls["contents"][0]
     assert "Newton's laws" in calls["contents"][0]

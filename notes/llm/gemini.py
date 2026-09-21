@@ -1,6 +1,5 @@
 import json
 
-from django.conf import settings
 from google import genai
 from google.genai import types
 
@@ -25,7 +24,6 @@ class GeminiClient:
             config=types.GenerateContentConfig(
                 system_instruction=build_prompt(output_types, context),
                 response_mime_type="application/json",
-                max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS,
             ),
         )
         payload = json.loads(response.text or "{}")
