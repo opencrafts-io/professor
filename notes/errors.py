@@ -1,5 +1,6 @@
 import logging
 
+from django.http import Http404
 from rest_framework import status
 from rest_framework.exceptions import APIException, NotFound, ValidationError
 from rest_framework.response import Response
@@ -47,19 +48,17 @@ def envelope_exception_handler(exc, context):
             exc.detail,
             status.HTTP_400_BAD_REQUEST,
         )
-    if isinstance(exc, NotFound):
-        return _envelope(
-            ErrorCode.NOT_FOUND, str(exc.detail), {}, status.HTTP_404_NOT_FOUND
-        )
+    if isinstance(exc, (NotFound, Http404)):
+        message = str(getattr(exc, "detail", "")) or "Not found."
+        return _envelope(ErrorCode.NOT_FOUND, message, {}, status.HTTP_404_NOT_FOUND)
 
     response = drf_exception_handler(exc, context)
     if response is not None:
         # Other DRF exceptions (auth, permission, throttle): keep the code stable per contract.
         code = getattr(exc, "error_code", None) or getattr(exc, "default_code", "error")
+        detail = str(getattr(exc, "detail", exc))
         message = (
-            response.data.get("detail", str(exc.detail))
-            if isinstance(response.data, dict)
-            else str(exc.detail)
+            response.data.get("detail", detail) if isinstance(response.data, dict) else detail
         )
         return _envelope(str(code), str(message), {}, response.status_code)
 

@@ -6,6 +6,23 @@ from rest_framework import serializers
 from notes.errors import APIError, ErrorCode, NotesAPIView
 
 
+class Http404View(NotesAPIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        from django.http import Http404
+
+        raise Http404("gone")
+
+
+def test_plain_http404_renders_envelope_not_500():
+    response = Http404View.as_view()(RequestFactory().get("/x"))
+    assert response.status_code == 404
+    response.render()
+    assert json.loads(response.content)["error"]["code"] == "not_found"
+
+
 class BoomView(NotesAPIView):
     authentication_classes = []
     permission_classes = []

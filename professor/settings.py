@@ -133,6 +133,9 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "professor.verisafe_jwt_authentication.VerisafeJWTAuthentication",
     ],
+    # "?format=" is API data on notes endpoints (question format); without this,
+    # DRF treats it as a response-renderer suffix and 404s unknown values.
+    "URL_FORMAT_OVERRIDE": None,
 }
 
 MIDDLEWARE = [

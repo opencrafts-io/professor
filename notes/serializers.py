@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import GenerationJob, Note, Summary
+from .models import GenerationJob, Note, QuestionSet, Summary
 
 
 class NoteSerializer(serializers.ModelSerializer):
@@ -52,3 +52,11 @@ class SummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = Summary
         fields = ["note_id", "generated_at", "content"]
+
+
+class QuestionSetSerializer(serializers.ModelSerializer):
+    generated_at = serializers.DateTimeField(source="created_at")
+
+    class Meta:
+        model = QuestionSet
+        fields = ["id", "format", "generated_at", "questions"]

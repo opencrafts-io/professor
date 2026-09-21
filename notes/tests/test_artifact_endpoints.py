@@ -76,6 +76,60 @@ def test_summary_owner_scoped(api_client, note, job):
     assert response.status_code == 404
 
 
+FLASHCARDS = [{"front": "Q", "back": "A"}]
+MCQS = [{"question": "q", "choices": ["a", "b"], "answer_index": 0, "explanation": "e"}]
+
+
+def _make_set(note, job, fmt, questions):
+    from notes.models import QuestionSet
+
+    return QuestionSet.objects.create(
+        note=note, job=job, format=fmt, questions=questions, prompt_version="v3"
+    )
+
+
+def test_questions_endpoint_lists_sets_per_contract(auth_client, note, job):
+    _make_set(note, job, "flashcard", FLASHCARDS)
+    _make_set(note, job, "mcq", MCQS)
+    response = auth_client.get(f"/api/notes/{note.pk}/questions/")
+    assert response.status_code == 200
+    assert response.data["note_id"] == note.pk
+    sets = response.data["sets"]
+    assert {s["format"] for s in sets} == {"flashcard", "mcq"}
+    for s in sets:
+        assert set(s) == {"id", "format", "generated_at", "questions"}
+    flashcard_set = next(s for s in sets if s["format"] == "flashcard")
+    assert flashcard_set["questions"] == FLASHCARDS
+
+
+def test_questions_endpoint_filters_by_format(auth_client, note, job):
+    _make_set(note, job, "flashcard", FLASHCARDS)
+    _make_set(note, job, "mcq", MCQS)
+    response = auth_client.get(f"/api/notes/{note.pk}/questions/?format=mcq")
+    assert [s["format"] for s in response.data["sets"]] == ["mcq"]
+
+
+def test_questions_endpoint_empty_when_none(auth_client, note):
+    response = auth_client.get(f"/api/notes/{note.pk}/questions/")
+    assert response.status_code == 200
+    assert response.data["sets"] == []
+
+
+def test_questions_endpoint_owner_scoped(api_client, note, job):
+    _make_set(note, job, "flashcard", FLASHCARDS)
+    stranger = User.objects.create(user_id=uuid.uuid4(), name="Stranger")
+    api_client.force_authenticate(user=stranger)
+    assert api_client.get(f"/api/notes/{note.pk}/questions/").status_code == 404
+
+
+def test_note_detail_lists_question_formats(auth_client, note, job):
+    _make_set(note, job, "flashcard", FLASHCARDS)
+    _make_set(note, job, "flashcard", FLASHCARDS)
+    _make_set(note, job, "mcq", MCQS)
+    artifacts = auth_client.get(f"/api/notes/{note.pk}/").data["artifacts"]
+    assert artifacts["questions"] == ["flashcard", "mcq"]
+
+
 def test_note_detail_reports_summary_artifact(auth_client, note, job):
     assert auth_client.get(f"/api/notes/{note.pk}/").data["artifacts"]["summary"] is False
     Summary.objects.create(note=note, job=job, content=CONTENT, prompt_version="v1")

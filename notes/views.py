@@ -10,7 +10,12 @@ from professor.pagination import ResultsSetPagination
 from .errors import APIError, ErrorCode, NotesAPIView
 from .llm.base import QUESTION_FORMATS, OutputType
 from .models import GenerationJob, Note
-from .serializers import GenerationJobSerializer, NoteSerializer, SummarySerializer
+from .serializers import (
+    GenerationJobSerializer,
+    NoteSerializer,
+    QuestionSetSerializer,
+    SummarySerializer,
+)
 from .services.entitlements import HasAIEntitlement
 from .tasks import run_generation
 
@@ -100,7 +105,7 @@ class NoteDetailView(NotesAPIView):
         data = NoteSerializer(note).data
         data["artifacts"] = {
             "summary": note.summaries.exists(),
-            "questions": [],  # question sets land wk4
+            "questions": sorted(set(note.question_sets.values_list("format", flat=True))),
             "podcast": False,  # wk5
             "study_plans": [],  # wk6
         }
@@ -164,6 +169,20 @@ class NoteGenerateView(NotesAPIView):
         )
         run_generation.delay(job.pk)
         return Response({"job_id": job.pk}, status=status.HTTP_202_ACCEPTED)
+
+
+class NoteQuestionsView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def get(self, request, pk):
+        note = get_owned_note(request, pk)
+        sets = note.question_sets.all()
+        requested_format = request.query_params.get("format")
+        if requested_format:
+            sets = sets.filter(format=requested_format)
+        return Response(
+            {"note_id": note.pk, "sets": QuestionSetSerializer(sets, many=True).data}
+        )
 
 
 class JobDetailView(NotesAPIView):
