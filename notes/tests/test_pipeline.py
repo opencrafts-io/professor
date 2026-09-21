@@ -18,7 +18,7 @@ def test_upload_generate_poll_fetch_summary_and_questions(auth_client):
 
     response = auth_client.post(
         f"/api/notes/{note_id}/generate/",
-        {"outputs": ["summary", "questions"], "question_format": "flashcard"},
+        {"outputs": ["summary", "questions", "podcast"], "question_format": "flashcard"},
         format="json",
     )
     assert response.status_code == 202
@@ -37,9 +37,14 @@ def test_upload_generate_poll_fetch_summary_and_questions(auth_client):
     assert len(questions["sets"]) == 1
     assert questions["sets"][0]["questions"]
 
+    podcast = auth_client.get(f"/api/notes/{note_id}/podcast/").data
+    assert podcast["script"]
+    assert podcast["audio_url"]
+
     detail = auth_client.get(f"/api/notes/{note_id}/").data
     assert detail["artifacts"]["summary"] is True
     assert detail["artifacts"]["questions"] == ["flashcard"]
+    assert detail["artifacts"]["podcast"] is True
 
 
 def test_pipeline_surfaces_llm_failure_via_job_poll(auth_client, monkeypatch):
