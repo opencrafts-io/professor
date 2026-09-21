@@ -1,6 +1,6 @@
 import pytest
 
-from notes.models import GenerationJob, Note, Summary, note_upload_path
+from notes.models import GenerationJob, Note, QuestionSet, Summary, note_upload_path
 
 
 @pytest.fixture
@@ -40,6 +40,32 @@ def test_latest_summary_wins(note, user):
     Summary.objects.create(note=note, job=job, content={"title": "old"}, prompt_version="v1")
     newer = Summary.objects.create(note=note, job=job, content={"title": "new"}, prompt_version="v1")
     assert note.summaries.first() == newer
+
+
+def test_question_set_belongs_to_note_with_format(note, user):
+    job = GenerationJob.objects.create(
+        note=note, owner=user, requested_outputs=["questions"], question_format="flashcard"
+    )
+    question_set = QuestionSet.objects.create(
+        note=note,
+        job=job,
+        format="flashcard",
+        questions=[{"front": "Q", "back": "A"}],
+        prompt_version="v3",
+    )
+    assert question_set in note.question_sets.all()
+    assert job.question_format == "flashcard"
+    assert question_set.created_at is not None
+
+
+def test_question_set_survives_job_deletion(note, user):
+    job = GenerationJob.objects.create(note=note, owner=user, requested_outputs=["questions"])
+    question_set = QuestionSet.objects.create(
+        note=note, job=job, format="mcq", questions=[], prompt_version="v3"
+    )
+    job.delete()
+    question_set.refresh_from_db()
+    assert question_set.job is None
 
 
 def test_summary_survives_job_deletion(note, user):

@@ -50,6 +50,7 @@ class GenerationJob(models.Model):
     )
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="generation_jobs")
     requested_outputs = models.JSONField(default=list)
+    question_format = models.CharField(max_length=16, blank=True, default="")
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=PENDING)
     failure_code = models.CharField(max_length=64, blank=True, default="")
     failure_message = models.TextField(blank=True, default="")
@@ -84,6 +85,30 @@ class GenerationJob(models.Model):
 
     def __str__(self):
         return f"job {self.pk} [{self.status}] outputs={self.requested_outputs}"
+
+
+class QuestionSet(models.Model):
+    FORMAT_CHOICES = [(f, f) for f in ("flashcard", "mcq", "open_ended")]
+
+    note = models.ForeignKey(Note, on_delete=models.CASCADE, related_name="question_sets")
+    # Artifacts outlive job pruning; the job link is for prompt-quality tracing only.
+    job = models.ForeignKey(
+        GenerationJob,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="question_sets",
+    )
+    format = models.CharField(max_length=16, choices=FORMAT_CHOICES)
+    questions = models.JSONField()
+    prompt_version = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.format} set {self.pk} for note {self.note_id}"
 
 
 class Summary(models.Model):
