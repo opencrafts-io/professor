@@ -30,8 +30,9 @@ def celery_eager(settings):
 
 @pytest.fixture(autouse=True)
 def fake_llm_backend(settings):
-    # No test may ever reach the real Gemini service.
+    # No test may ever reach the real Gemini text or TTS services.
     settings.AI_LLM_BACKEND = "fake"
+    settings.AI_TTS_BACKEND = "fake"
 
 
 @pytest.fixture(autouse=True)

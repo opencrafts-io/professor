@@ -33,6 +33,16 @@ def get_markdown_converter():
     return MarkItDownConverter()
 
 
+def get_tts_client():
+    if settings.AI_TTS_BACKEND == "fake":
+        from ..tts.fake import FakeTTSClient
+
+        return FakeTTSClient()
+    from ..tts.gemini import GeminiTTSClient
+
+    return GeminiTTSClient(api_key=settings.GEMINI_API_KEY)
+
+
 def _context_for(job):
     note = job.note
     if note.course:
