@@ -42,6 +42,7 @@ class GenerationJob(models.Model):
     FAILURE_FILE_UNREADABLE = "file_unreadable"
     FAILURE_CONVERSION = "conversion_failed"
     FAILURE_PROVIDER = "llm_provider_error"
+    FAILURE_TTS = "tts_provider_error"
     FAILURE_INVALID_OUTPUT = "llm_invalid_output"
     FAILURE_INTERNAL = "internal_error"
 
@@ -109,6 +110,31 @@ class QuestionSet(models.Model):
 
     def __str__(self):
         return f"{self.format} set {self.pk} for note {self.note_id}"
+
+
+def podcast_upload_path(instance, filename):
+    return f"podcasts/{instance.note.owner.user_id}/{instance.note_id}/{uuid.uuid4().hex}.wav"
+
+
+class Podcast(models.Model):
+    note = models.ForeignKey(Note, on_delete=models.CASCADE, related_name="podcasts")
+    # Artifacts outlive job pruning; the job link is for prompt-quality tracing only.
+    job = models.ForeignKey(
+        GenerationJob, on_delete=models.SET_NULL, null=True, blank=True, related_name="podcasts"
+    )
+    title = models.CharField(max_length=255, blank=True, default="")
+    script = models.TextField()
+    audio = models.FileField(upload_to=podcast_upload_path)
+    duration_seconds = models.FloatField(default=0)
+    tts_provider = models.CharField(max_length=64)
+    prompt_version = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"podcast {self.pk} for note {self.note_id}"
 
 
 class Summary(models.Model):

@@ -39,5 +39,8 @@ def fake_llm_backend(settings):
 def in_memory_storage(settings):
     settings.STORAGES = {
         **settings.STORAGES,
-        "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+        "default": {
+            "BACKEND": "django.core.files.storage.InMemoryStorage",
+            "OPTIONS": {"base_url": "/media/"},
+        },
     }

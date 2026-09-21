@@ -3,16 +3,19 @@ import logging
 import time
 
 from django.conf import settings
+from django.core.files.base import ContentFile
+
 from ..convert.base import ConversionError
 from ..llm.base import (
     PROMPT_VERSION,
     DocumentSource,
     GenerationContext,
     OutputType,
+    validate_podcast_script,
     validate_questions,
     validate_summary,
 )
-from ..models import GenerationJob, QuestionSet, Summary
+from ..models import GenerationJob, Podcast, QuestionSet, Summary
 
 logger = logging.getLogger("professor")
 
@@ -66,6 +69,9 @@ def _validate_outputs(result, output_types, question_format):
             result.outputs.get(OutputType.QUESTIONS), question_format
         )
         problems.extend(f"questions: {p}" for p in question_problems)
+    if OutputType.PODCAST in output_types:
+        podcast_problems = validate_podcast_script(result.outputs.get(OutputType.PODCAST))
+        problems.extend(f"podcast: {p}" for p in podcast_problems)
     return problems
 
 
@@ -98,7 +104,7 @@ def _document_for(note, markdown_converter):
     return DocumentSource(markdown=markdown)
 
 
-def run_generation_job(job_id, client=None, markdown_converter=None):
+def run_generation_job(job_id, client=None, markdown_converter=None, tts_client=None):
     job = GenerationJob.objects.select_related("note", "note__course").filter(pk=job_id).first()
     if job is None or job.status in (GenerationJob.DONE, GenerationJob.FAILED):
         logger.warning("generation job %s skipped (missing or already finished)", job_id)
@@ -153,6 +159,32 @@ def run_generation_job(job_id, client=None, markdown_converter=None):
             format=job.question_format,
             questions=result.outputs[OutputType.QUESTIONS],
             prompt_version=PROMPT_VERSION,
+        )
+    if OutputType.PODCAST in output_types:
+        script_data = result.outputs[OutputType.PODCAST]
+        tts_client = tts_client or get_tts_client()
+        try:
+            tts_result = tts_client.synthesize(script_data["script"])
+        except Exception as exc:
+            _fail(job, GenerationJob.FAILURE_TTS, str(exc))
+            return
+        podcast = Podcast(
+            note=job.note,
+            job=job,
+            title=script_data.get("title", ""),
+            script=script_data["script"],
+            duration_seconds=tts_result.duration_seconds,
+            tts_provider=tts_client.provider,
+            prompt_version=PROMPT_VERSION,
+        )
+        podcast.audio.save("episode.wav", ContentFile(tts_result.audio_wav), save=True)
+        logger.info(
+            "podcast tts job=%s note=%s provider=%s seconds=%.1f audio_tokens=%s",
+            job.pk,
+            job.note_id,
+            tts_client.provider,
+            tts_result.duration_seconds,
+            tts_result.audio_tokens,
         )
     job.mark_done(input_tokens=input_tokens, output_tokens=output_tokens)
     logger.info(

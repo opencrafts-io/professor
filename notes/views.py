@@ -13,14 +13,19 @@ from .models import GenerationJob, Note
 from .serializers import (
     GenerationJobSerializer,
     NoteSerializer,
+    PodcastSerializer,
     QuestionSetSerializer,
     SummarySerializer,
 )
 from .services.entitlements import HasAIEntitlement
 from .tasks import run_generation
 
-# generation grows to podcast (wk5) and study plans (wk6)
-IMPLEMENTED_OUTPUTS = {OutputType.SUMMARY.value, OutputType.QUESTIONS.value}
+# generation grows to study plans (wk6)
+IMPLEMENTED_OUTPUTS = {
+    OutputType.SUMMARY.value,
+    OutputType.QUESTIONS.value,
+    OutputType.PODCAST.value,
+}
 
 
 def get_owned_note(request, pk):
@@ -106,7 +111,7 @@ class NoteDetailView(NotesAPIView):
         data["artifacts"] = {
             "summary": note.summaries.exists(),
             "questions": sorted(set(note.question_sets.values_list("format", flat=True))),
-            "podcast": False,  # wk5
+            "podcast": note.podcasts.exists(),
             "study_plans": [],  # wk6
         }
         return Response(data)
@@ -183,6 +188,19 @@ class NoteQuestionsView(NotesAPIView):
         return Response(
             {"note_id": note.pk, "sets": QuestionSetSerializer(sets, many=True).data}
         )
+
+
+class NotePodcastView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def get(self, request, pk):
+        note = get_owned_note(request, pk)
+        podcast = note.podcasts.first()  # newest first per Meta ordering
+        if podcast is None:
+            raise APIError(
+                "No podcast exists for this note yet.", code=ErrorCode.NOT_FOUND, status_code=404
+            )
+        return Response(PodcastSerializer(podcast, context={"request": request}).data)
 
 
 class JobDetailView(NotesAPIView):

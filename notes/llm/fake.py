@@ -7,12 +7,18 @@ _DEFAULT_SUMMARY = {
 
 _DEFAULT_QUESTIONS = [{"front": "What is sampled?", "back": "A fake flashcard."}]
 
+_DEFAULT_PODCAST = {
+    "title": "Sample episode",
+    "script": "Alex: Welcome to the show.\nJordan: Today we recap the key ideas.",
+}
+
 
 class FakeClient:
     def __init__(self, responses=None, script=None, input_tokens=10, output_tokens=5):
         self._responses = responses or {
             OutputType.SUMMARY: _DEFAULT_SUMMARY,
             OutputType.QUESTIONS: _DEFAULT_QUESTIONS,
+            OutputType.PODCAST: _DEFAULT_PODCAST,
         }
         self._script = list(script) if script else None
         self._input_tokens = input_tokens

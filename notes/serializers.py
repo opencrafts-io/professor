@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import GenerationJob, Note, QuestionSet, Summary
+from .models import GenerationJob, Note, Podcast, QuestionSet, Summary
 
 
 class NoteSerializer(serializers.ModelSerializer):
@@ -60,3 +60,13 @@ class QuestionSetSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuestionSet
         fields = ["id", "format", "generated_at", "questions"]
+
+
+class PodcastSerializer(serializers.ModelSerializer):
+    note_id = serializers.IntegerField()
+    generated_at = serializers.DateTimeField(source="created_at")
+    audio_url = serializers.FileField(source="audio", use_url=True)
+
+    class Meta:
+        model = Podcast
+        fields = ["note_id", "generated_at", "duration_seconds", "audio_url", "script"]

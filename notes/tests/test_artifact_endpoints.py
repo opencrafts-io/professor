@@ -130,6 +130,48 @@ def test_note_detail_lists_question_formats(auth_client, note, job):
     assert artifacts["questions"] == ["flashcard", "mcq"]
 
 
+def _make_podcast(note, job):
+    from django.core.files.base import ContentFile
+
+    from notes.models import Podcast
+
+    podcast = Podcast(
+        note=note,
+        job=job,
+        title="Fourier in five",
+        script="Alex: hi\nJordan: hello",
+        duration_seconds=42.5,
+        tts_provider="fake",
+        prompt_version="v3",
+    )
+    podcast.audio.save("episode.wav", ContentFile(b"RIFFfake"), save=True)
+    return podcast
+
+
+def test_podcast_endpoint_404_before_one_exists(auth_client, note):
+    response = auth_client.get(f"/api/notes/{note.pk}/podcast/")
+    assert response.status_code == 404
+    assert response.data["error"]["code"] == "not_found"
+
+
+def test_podcast_endpoint_matches_contract_shape(auth_client, note, job):
+    _make_podcast(note, job)
+    response = auth_client.get(f"/api/notes/{note.pk}/podcast/")
+    assert response.status_code == 200
+    data = response.data
+    assert data["note_id"] == note.pk
+    assert data["duration_seconds"] == 42.5
+    assert data["script"].startswith("Alex:")
+    assert "podcasts/" in data["audio_url"]
+    assert data["generated_at"] is not None
+
+
+def test_note_detail_reports_podcast_artifact(auth_client, note, job):
+    assert auth_client.get(f"/api/notes/{note.pk}/").data["artifacts"]["podcast"] is False
+    _make_podcast(note, job)
+    assert auth_client.get(f"/api/notes/{note.pk}/").data["artifacts"]["podcast"] is True
+
+
 def test_note_detail_reports_summary_artifact(auth_client, note, job):
     assert auth_client.get(f"/api/notes/{note.pk}/").data["artifacts"]["summary"] is False
     Summary.objects.create(note=note, job=job, content=CONTENT, prompt_version="v1")

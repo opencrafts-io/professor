@@ -291,6 +291,59 @@ def test_invalid_questions_fail_after_corrective_retry(note, user):
     assert len(client.calls) == 2
 
 
+PODCAST_OUT = {
+    "title": "Fourier in five minutes",
+    "script": "Alex: Welcome!\nJordan: Fourier series decompose periodic signals.",
+}
+
+
+def test_podcast_job_synthesizes_audio_and_persists(note, user):
+    from notes.models import Podcast
+    from notes.tts.fake import FakeTTSClient
+
+    job = GenerationJob.objects.create(note=note, owner=user, requested_outputs=["podcast"])
+    client = FakeClient(responses={OutputType.PODCAST: PODCAST_OUT})
+    tts = FakeTTSClient()
+    run_generation_job(job.pk, client=client, tts_client=tts)
+    job.refresh_from_db()
+    assert job.status == GenerationJob.DONE
+    assert tts.scripts == [PODCAST_OUT["script"]]
+    podcast = Podcast.objects.get(note=note)
+    assert podcast.script == PODCAST_OUT["script"]
+    assert podcast.title == PODCAST_OUT["title"]
+    assert podcast.duration_seconds > 0
+    assert podcast.tts_provider == "fake"
+    assert podcast.audio.name.startswith(f"podcasts/{user.user_id}/{note.pk}/")
+    with podcast.audio.open("rb") as f:
+        assert f.read(4) == b"RIFF"
+
+
+def test_tts_failure_fails_job_with_tts_code(note, user):
+    from notes.models import Podcast
+    from notes.tts.fake import FakeTTSClient
+
+    job = GenerationJob.objects.create(note=note, owner=user, requested_outputs=["podcast"])
+    client = FakeClient(responses={OutputType.PODCAST: PODCAST_OUT})
+    tts = FakeTTSClient(error=RuntimeError("voice service down"))
+    run_generation_job(job.pk, client=client, tts_client=tts)
+    job.refresh_from_db()
+    assert job.status == GenerationJob.FAILED
+    assert job.failure_code == GenerationJob.FAILURE_TTS
+    assert not Podcast.objects.filter(note=note).exists()
+
+
+def test_invalid_podcast_script_fails_after_retry(note, user):
+    job = GenerationJob.objects.create(note=note, owner=user, requested_outputs=["podcast"])
+    monologue = {"title": "t", "script": "Alex: talking to myself"}
+    client = FakeClient(
+        script=[{OutputType.PODCAST: monologue}, {OutputType.PODCAST: monologue}]
+    )
+    run_generation_job(job.pk, client=client)
+    job.refresh_from_db()
+    assert job.status == GenerationJob.FAILED
+    assert job.failure_code == GenerationJob.FAILURE_INVALID_OUTPUT
+
+
 def test_worker_task_runs_job(job, settings):
     settings.AI_LLM_BACKEND = "fake"
     from notes.tasks import run_generation
