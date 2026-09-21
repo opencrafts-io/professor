@@ -47,6 +47,13 @@ def test_upload_accepts_pptx(auth_client):
     assert response.status_code == 201, response.content
 
 
+def test_upload_supports_excel_workbook_signatures():
+    from notes.views import NoteListCreateView
+
+    assert NoteListCreateView.SUPPORTED_TYPES[".xlsx"] == b"PK\x03\x04"
+    assert NoteListCreateView.SUPPORTED_TYPES[".xls"] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+
 def test_upload_rejects_unknown_extension(auth_client):
     txt = SimpleUploadedFile("notes.txt", b"plain text", content_type="text/plain")
     response = auth_client.post("/api/notes/", {"file": txt}, format="multipart")
@@ -86,7 +93,9 @@ def test_upload_denied_without_entitlement(auth_client, settings):
 
 def test_upload_rejects_unknown_course(auth_client):
     response = auth_client.post(
-        "/api/notes/", {"file": _pdf(), "course_id": 999999}, format="multipart"
+        "/api/notes/",
+        {"file": _pdf(), "course_id": "00000000-0000-0000-0000-000000000000"},
+        format="multipart",
     )
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "validation_error"

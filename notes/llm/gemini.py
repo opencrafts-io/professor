@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings
 from google import genai
 from google.genai import types
 
@@ -11,14 +12,18 @@ class GeminiClient:
         self._client = genai.Client(api_key=api_key)
         self._model = model
 
-    def generate(self, pdf_bytes, output_types, context):
+    def generate(self, document_markdown, output_types, context):
+        source = """<source_document>
+%s
+</source_document>""" % document_markdown
         response = self._client.models.generate_content(
             model=self._model,
-            contents=[
-                types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
-                build_prompt(output_types, context),
-            ],
-            config=types.GenerateContentConfig(response_mime_type="application/json"),
+            contents=[source],
+            config=types.GenerateContentConfig(
+                system_instruction=build_prompt(output_types, context),
+                response_mime_type="application/json",
+                max_output_tokens=settings.GEMINI_MAX_OUTPUT_TOKENS,
+            ),
         )
         payload = json.loads(response.text or "{}")
         usage = response.usage_metadata

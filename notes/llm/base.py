@@ -3,7 +3,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
@@ -30,7 +30,7 @@ class GenerationResult:
 
 
 class LLMClient(Protocol):
-    def generate(self, pdf_bytes, output_types, context) -> GenerationResult: ...
+    def generate(self, document_markdown: str, output_types, context) -> GenerationResult: ...
 
 
 def _template(name):

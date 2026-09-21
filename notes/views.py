@@ -4,7 +4,7 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
 
-from courses.models import Course
+from courses.models import StudentCourse
 from professor.pagination import ResultsSetPagination
 
 from .errors import APIError, ErrorCode, NotesAPIView
@@ -34,8 +34,14 @@ class NoteListCreateView(NotesAPIView):
         page = paginator.paginate_queryset(queryset, request, view=self)
         return paginator.get_paginated_response(NoteSerializer(page, many=True).data)
 
-    # extension -> required magic bytes (docx/pptx are OOXML zip containers)
-    SUPPORTED_TYPES = {".pdf": b"%PDF-", ".docx": b"PK\x03\x04", ".pptx": b"PK\x03\x04"}
+    # extension -> required magic bytes (Office Open XML files are ZIP containers).
+    SUPPORTED_TYPES = {
+        ".pdf": b"%PDF-",
+        ".docx": b"PK\x03\x04",
+        ".pptx": b"PK\x03\x04",
+        ".xlsx": b"PK\x03\x04",
+        ".xls": b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",
+    }
 
     def post(self, request):
         upload = request.FILES.get("file")
@@ -45,11 +51,11 @@ class NoteListCreateView(NotesAPIView):
             )
         ext = Path(upload.name).suffix.lower()
         magic = self.SUPPORTED_TYPES.get(ext)
-        head = upload.read(5)
+        head = upload.read(max(len(signature) for signature in self.SUPPORTED_TYPES.values()))
         upload.seek(0)
         if magic is None or not head.startswith(magic):
             raise APIError(
-                "Only PDF, Word (.docx), and PowerPoint (.pptx) files are accepted.",
+                "Only PDF, Word (.docx), PowerPoint (.pptx), and Excel (.xlsx/.xls) files are accepted.",
                 code=ErrorCode.UNSUPPORTED_FILE_TYPE,
                 status_code=400,
                 details={"supported": sorted(self.SUPPORTED_TYPES)},
@@ -66,7 +72,7 @@ class NoteListCreateView(NotesAPIView):
         course = None
         course_id = request.data.get("course_id")
         if course_id:
-            course = Course.objects.filter(pk=course_id).first()
+            course = StudentCourse.objects.filter(pk=course_id).first()
             if course is None:
                 raise APIError(
                     "Unknown course_id.",
@@ -102,13 +108,10 @@ class NoteDetailView(NotesAPIView):
 
     def delete(self, request, pk):
         note = get_owned_note(request, pk)
-        for blob in (note.file, note.converted_file):
-            if not blob:
-                continue
-            try:
-                blob.delete(save=False)
-            except FileNotFoundError:
-                pass  # missing blob on delete is the desired end state
+        try:
+            note.file.delete(save=False)
+        except FileNotFoundError:
+            pass  # missing blob on delete is the desired end state
         note.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

@@ -3,8 +3,6 @@ import logging
 import time
 
 from django.conf import settings
-from django.core.files.base import ContentFile
-
 from ..convert.base import ConversionError
 from ..llm.base import PROMPT_VERSION, GenerationContext, OutputType, validate_summary
 from ..models import GenerationJob, Summary
@@ -22,20 +20,16 @@ def get_llm_client():
     return GeminiClient(api_key=settings.GEMINI_API_KEY)
 
 
-def get_converter():
-    if settings.AI_CONVERTER_BACKEND == "fake":
-        from ..convert.fake import FakeConverter
+def get_markdown_converter():
+    from ..convert.markitdown import MarkItDownConverter
 
-        return FakeConverter()
-    from ..convert.ilovepdf import ILovePDFConverter
-
-    return ILovePDFConverter(public_key=settings.ILOVEAPI_PUBLIC_KEY)
+    return MarkItDownConverter()
 
 
 def _context_for(note):
     if note.course:
         return GenerationContext(
-            course_name=note.course.course_name, course_code=note.course.course_code
+            course_name=note.course.title, course_code=note.course.code
         )
     return GenerationContext(course_name=note.course_label)
 
@@ -48,22 +42,21 @@ def _validate_outputs(result, output_types):
     return problems
 
 
-def _pdf_bytes_for(note, converter):
-    if note.file.name.lower().endswith(".pdf"):
-        with note.file.open("rb") as f:
-            return f.read()
-    if note.converted_file:
-        with note.converted_file.open("rb") as f:
-            return f.read()
+def _markdown_for(note, markdown_converter):
     with note.file.open("rb") as f:
         source_bytes = f.read()
-    converter = converter or get_converter()
-    pdf_bytes = converter.to_pdf(source_bytes, note.original_filename)
-    note.converted_file.save("converted.pdf", ContentFile(pdf_bytes), save=True)
-    return pdf_bytes
+    markdown_converter = markdown_converter or get_markdown_converter()
+    markdown = markdown_converter.to_markdown(source_bytes, note.original_filename)
+    if len(markdown) > settings.NOTES_MAX_MARKDOWN_CHARS:
+        raise ConversionError("Converted document exceeds the Markdown input limit.")
+    return markdown
 
 
-def run_generation_job(job_id, client=None, converter=None):
+def _document_for(note, markdown_converter):
+    return _markdown_for(note, markdown_converter)
+
+
+def run_generation_job(job_id, client=None, markdown_converter=None):
     job = GenerationJob.objects.select_related("note", "note__course").filter(pk=job_id).first()
     if job is None or job.status in (GenerationJob.DONE, GenerationJob.FAILED):
         logger.warning("generation job %s skipped (missing or already finished)", job_id)
@@ -73,7 +66,7 @@ def run_generation_job(job_id, client=None, converter=None):
     job.save(update_fields=["prompt_version"])
 
     try:
-        pdf_bytes = _pdf_bytes_for(job.note, converter)
+        document = _document_for(job.note, markdown_converter)
     except ConversionError as exc:
         _fail(job, GenerationJob.FAILURE_CONVERSION, str(exc))
         return
@@ -89,7 +82,7 @@ def run_generation_job(job_id, client=None, converter=None):
     started = time.monotonic()
     for attempt in range(2):
         try:
-            result = client.generate(pdf_bytes, output_types, context)
+            result = client.generate(document, output_types, context)
         except Exception as exc:
             _fail(job, GenerationJob.FAILURE_PROVIDER, str(exc))
             return

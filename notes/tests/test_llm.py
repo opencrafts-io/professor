@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from notes.llm.base import (
     GenerationContext,
     OutputType,
@@ -28,6 +30,8 @@ def test_build_prompt_includes_course_and_output_block():
     )
     assert "MAT 2201" in prompt
     assert "summary" in prompt.lower()
+    assert "mobile" in prompt.lower()
+    assert "Academia is for you." in prompt
 
 
 def test_build_prompt_appends_corrective_note():
@@ -43,3 +47,41 @@ def test_fake_client_plays_scripted_responses_in_order():
     second = client.generate(b"%PDF-", [OutputType.SUMMARY], GenerationContext())
     assert first.outputs[OutputType.SUMMARY] == bad
     assert second.outputs[OutputType.SUMMARY] == good
+
+
+def test_gemini_separates_system_instruction_from_source_material(settings, monkeypatch):
+    from notes.llm import gemini
+
+    calls = {}
+
+    class StubModels:
+        def generate_content(self, **kwargs):
+            calls.update(kwargs)
+            return SimpleNamespace(
+                text='{"summary": {"title": "t", "sections": []}}',
+                usage_metadata=SimpleNamespace(prompt_token_count=3, candidates_token_count=2),
+            )
+
+    monkeypatch.setattr(
+        gemini.genai, "Client", lambda api_key: SimpleNamespace(models=StubModels())
+    )
+    monkeypatch.setattr(
+        gemini,
+        "types",
+        SimpleNamespace(
+            GenerateContentConfig=lambda **kwargs: kwargs,
+        ),
+    )
+    monkeypatch.setattr(gemini, "build_prompt", lambda *_: "Generate a summary.")
+    settings.GEMINI_MAX_OUTPUT_TOKENS = 600
+
+    gemini.GeminiClient("key").generate(
+        "# Lecture\n\nNewton's laws", [OutputType.SUMMARY], GenerationContext()
+    )
+
+    assert calls["config"]["system_instruction"] == "Generate a summary."
+    assert calls["config"]["max_output_tokens"] == 600
+    assert calls["config"]["response_mime_type"] == "application/json"
+    assert len(calls["contents"]) == 1
+    assert "<source_document>" in calls["contents"][0]
+    assert "Newton's laws" in calls["contents"][0]

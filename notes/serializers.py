@@ -4,7 +4,7 @@ from .models import GenerationJob, Note, Summary
 
 
 class NoteSerializer(serializers.ModelSerializer):
-    course_id = serializers.IntegerField(source="course.pk", allow_null=True, default=None)
+    course_id = serializers.UUIDField(source="course.pk", allow_null=True, default=None)
 
     class Meta:
         model = Note

@@ -126,12 +126,7 @@ AI_ENTITLEMENT_MODE = os.getenv("AI_ENTITLEMENT_MODE", "stub-allow")
 # Key is worker-only, so absence must not block web boot — checked at use time.
 AI_LLM_BACKEND = os.getenv("AI_LLM_BACKEND", "gemini")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-
-# Office->PDF conversion backend, same pattern. Secret key is reserved for
-# self-signed JWTs later (saves the auth round trip); not used yet.
-AI_CONVERTER_BACKEND = os.getenv("AI_CONVERTER_BACKEND", "ilovepdf")
-ILOVEAPI_PUBLIC_KEY = os.getenv("ILOVEAPI_PUBLIC_KEY", "")
-ILOVEAPI_SECRET_KEY = os.getenv("ILOVEAPI_SECRET_KEY", "")
+GEMINI_MAX_OUTPUT_TOKENS = 600
 
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
@@ -280,6 +275,7 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 
 NOTES_MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB cap for note PDFs
+NOTES_MAX_MARKDOWN_CHARS = 250_000  # avoids unbounded LLM input from an accepted upload
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
 
 # HTTPS Configuration
