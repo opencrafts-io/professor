@@ -182,6 +182,44 @@ def test_pdf_falls_back_to_native_bytes_when_extraction_fails(job):
     assert job.note.summaries.exists()
 
 
+def test_converted_markdown_is_cached_across_jobs(docx_note, docx_job, user):
+    class CountingConverter:
+        def __init__(self):
+            self.calls = 0
+
+        def to_markdown(self, file_bytes, filename):
+            self.calls += 1
+            return "# Lecture"
+
+    converter = CountingConverter()
+    run_generation_job(docx_job.pk, client=FakeClient(), markdown_converter=converter)
+    docx_note.refresh_from_db()
+    assert docx_note.converted_markdown == "# Lecture"
+
+    second_job = GenerationJob.objects.create(
+        note=docx_note, owner=user, requested_outputs=["summary"]
+    )
+    client = FakeClient()
+    run_generation_job(second_job.pk, client=client, markdown_converter=converter)
+    second_job.refresh_from_db()
+    assert second_job.status == GenerationJob.DONE
+    assert converter.calls == 1
+    assert client.document_text_seen == ["# Lecture"]
+
+
+def test_pdf_fallback_does_not_cache_markdown(job):
+    from notes.convert.base import ConversionError
+
+    class FailingConverter:
+        def to_markdown(self, file_bytes, filename):
+            raise ConversionError("no extractable text")
+
+    run_generation_job(job.pk, client=FakeClient(), markdown_converter=FailingConverter())
+    note = job.note
+    note.refresh_from_db()
+    assert note.converted_markdown == ""
+
+
 def test_conversion_failure_fails_job_without_llm_call(docx_job):
     from notes.convert.base import ConversionError
 

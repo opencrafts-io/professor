@@ -20,6 +20,9 @@ class Note(models.Model):
     )
     course_label = models.CharField(max_length=255, blank=True, default="")
     file = models.FileField(upload_to=note_upload_path)
+    # Markdown rendition produced once by the worker; empty until first generation
+    # (and stays empty for PDFs that go to the LLM natively).
+    converted_markdown = models.TextField(blank=True, default="")
     original_filename = models.CharField(max_length=255)
     size_bytes = models.BigIntegerField()
     uploaded_at = models.DateTimeField(auto_now_add=True)

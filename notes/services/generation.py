@@ -59,8 +59,10 @@ def _markdown_for(note, markdown_converter):
 
 
 def _document_for(note, markdown_converter):
+    if note.converted_markdown:
+        return DocumentSource(markdown=note.converted_markdown)
     try:
-        return DocumentSource(markdown=_markdown_for(note, markdown_converter))
+        markdown = _markdown_for(note, markdown_converter)
     except ConversionError as exc:
         # Scanned/image PDFs yield no usable text; Gemini reads them natively.
         if not note.file.name.lower().endswith(".pdf"):
@@ -70,6 +72,9 @@ def _document_for(note, markdown_converter):
         )
         with note.file.open("rb") as f:
             return DocumentSource(pdf_bytes=f.read())
+    note.converted_markdown = markdown
+    note.save(update_fields=["converted_markdown"])
+    return DocumentSource(markdown=markdown)
 
 
 def run_generation_job(job_id, client=None, markdown_converter=None):
