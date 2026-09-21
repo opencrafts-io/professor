@@ -41,6 +41,24 @@ class LLMClient(Protocol):
     def generate(self, document: DocumentSource, output_types, context) -> GenerationResult: ...
 
 
+QUESTION_FORMATS = ("flashcard", "mcq", "open_ended")
+
+_QUESTION_SHAPES = {
+    "flashcard": '{"front": "prompt side", "back": "answer side"}',
+    "mcq": (
+        '{"question": "...", "choices": ["four plausible options"],'
+        ' "answer_index": 0, "explanation": "why that answer is right"}'
+    ),
+    "open_ended": '{"question": "...", "model_answer": "a complete answer"}',
+}
+
+_QUESTION_FIELDS = {
+    "flashcard": ("front", "back"),
+    "mcq": ("question", "explanation"),
+    "open_ended": ("question", "model_answer"),
+}
+
+
 def _template(name):
     return (_PROMPTS_DIR / name).read_text(encoding="utf-8")
 
@@ -54,9 +72,46 @@ def build_prompt(output_types, context):
     ]
     if OutputType.SUMMARY in output_types:
         parts.append(_template("summary.txt"))
+    if OutputType.QUESTIONS in output_types:
+        parts.append(
+            _template("questions.txt").format(
+                question_format=context.question_format,
+                question_shape=_QUESTION_SHAPES[context.question_format],
+            )
+        )
     if context.corrective_note:
         parts.append(f"IMPORTANT — your previous response was rejected: {context.corrective_note}")
     return "\n\n".join(parts)
+
+
+def validate_questions(data, question_format):
+    if question_format not in QUESTION_FORMATS:
+        return [f"unknown question format '{question_format}'"]
+    if not isinstance(data, list) or not data:
+        return ["questions is not a non-empty list"]
+    problems = []
+    for i, question in enumerate(data):
+        if not isinstance(question, dict):
+            problems.append(f"question {i}: not an object")
+            continue
+        for field_name in _QUESTION_FIELDS[question_format]:
+            value = question.get(field_name)
+            if not isinstance(value, str) or not value.strip():
+                problems.append(f"question {i}: missing/invalid '{field_name}'")
+        if question_format == "mcq":
+            choices = question.get("choices")
+            answer_index = question.get("answer_index")
+            if not isinstance(choices, list) or len(choices) < 2 or not all(
+                isinstance(c, str) for c in choices
+            ):
+                problems.append(f"question {i}: missing/invalid 'choices'")
+            elif (
+                not isinstance(answer_index, int)
+                or isinstance(answer_index, bool)
+                or not 0 <= answer_index < len(choices)
+            ):
+                problems.append(f"question {i}: 'answer_index' out of range")
+    return problems
 
 
 def validate_summary(data):

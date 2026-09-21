@@ -43,6 +43,63 @@ def test_build_prompt_appends_corrective_note():
     assert "missing 'title'" in prompt
 
 
+def test_build_prompt_includes_question_block_with_format_shape():
+    context = GenerationContext(question_format="mcq")
+    prompt = build_prompt([OutputType.QUESTIONS], context)
+    assert '"questions"' in prompt
+    assert "mcq" in prompt
+    assert "answer_index" in prompt
+    assert "summary" not in prompt.lower().replace("study artifact", "")
+
+
+def test_build_prompt_bundles_summary_and_questions_blocks():
+    context = GenerationContext(question_format="flashcard")
+    prompt = build_prompt([OutputType.SUMMARY, OutputType.QUESTIONS], context)
+    assert '"summary"' in prompt
+    assert '"questions"' in prompt
+    assert '"front"' in prompt
+
+
+def test_validate_questions_accepts_each_format():
+    from notes.llm.base import validate_questions
+
+    assert validate_questions([{"front": "Q", "back": "A"}], "flashcard") == []
+    assert (
+        validate_questions(
+            [
+                {
+                    "question": "Which law?",
+                    "choices": ["First", "Second", "Third", "Zeroth"],
+                    "answer_index": 1,
+                    "explanation": "F = ma is Newton's second law.",
+                }
+            ],
+            "mcq",
+        )
+        == []
+    )
+    assert (
+        validate_questions([{"question": "Explain inertia.", "model_answer": "..."}], "open_ended")
+        == []
+    )
+
+
+def test_validate_questions_flags_problems():
+    from notes.llm.base import validate_questions
+
+    assert validate_questions([], "flashcard") != []
+    assert validate_questions({"front": "not a list"}, "flashcard") != []
+    assert any("back" in p for p in validate_questions([{"front": "Q"}], "flashcard"))
+    assert any(
+        "answer_index" in p
+        for p in validate_questions(
+            [{"question": "q", "choices": ["a", "b"], "answer_index": 5, "explanation": "e"}],
+            "mcq",
+        )
+    )
+    assert validate_questions([{"front": "Q", "back": "A"}], "essay") != []
+
+
 def test_fake_client_plays_scripted_responses_in_order():
     bad, good = {"title": 5}, {"title": "t", "sections": [{"heading": "h", "points": ["p"]}]}
     client = FakeClient(script=[{OutputType.SUMMARY: bad}, {OutputType.SUMMARY: good}])
