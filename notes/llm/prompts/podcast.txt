@@ -1,0 +1,8 @@
+Output key "podcast": a study-podcast script for two hosts reviewing this document, matching exactly:
+{"title": "episode title", "script": "Alex: ...\nJordan: ..."}
+
+Script rules:
+- Exactly two speakers named Alex and Jordan; every line starts with "Alex: " or "Jordan: ".
+- Alex drives the episode and asks sharp questions; Jordan explains with the document's own facts, numbers, and terms.
+- Conversational but dense: no filler chatter, every exchange teaches something from the document.
+- Length: about 3-5 minutes when read aloud (roughly 450-750 words). Open by saying what the episode covers; close with the three takeaways to remember.

@@ -84,6 +84,31 @@ def test_validate_questions_accepts_each_format():
     )
 
 
+def test_build_prompt_includes_podcast_block_with_hosts():
+    prompt = build_prompt([OutputType.PODCAST], GenerationContext())
+    assert '"podcast"' in prompt
+    assert "Alex" in prompt and "Jordan" in prompt
+
+
+def test_validate_podcast_script_accepts_two_host_dialogue():
+    from notes.llm.base import validate_podcast_script
+
+    script = "Alex: Welcome to the show.\nJordan: Today we cover Fourier series.\nAlex: Let's go."
+    assert validate_podcast_script({"title": "Fourier basics", "script": script}) == []
+
+
+def test_validate_podcast_script_flags_problems():
+    from notes.llm.base import validate_podcast_script
+
+    assert validate_podcast_script(None) != []
+    assert any("title" in p for p in validate_podcast_script({"script": "Alex: hi\nJordan: yo"}))
+    assert any(
+        "script" in p for p in validate_podcast_script({"title": "t", "script": "   "})
+    )
+    # monologue missing the second host is rejected — TTS speaker mapping needs both
+    assert validate_podcast_script({"title": "t", "script": "Alex: all alone here"}) != []
+
+
 def test_validate_questions_flags_problems():
     from notes.llm.base import validate_questions
 

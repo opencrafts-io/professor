@@ -10,7 +10,7 @@ _PROMPTS_DIR = Path(__file__).parent / "prompts"
 class OutputType(StrEnum):
     SUMMARY = "summary"
     QUESTIONS = "questions"
-    PODCAST_SCRIPT = "podcast_script"
+    PODCAST = "podcast"
     STUDY_PLAN = "study_plan"
 
 
@@ -79,6 +79,8 @@ def build_prompt(output_types, context):
                 question_shape=_QUESTION_SHAPES[context.question_format],
             )
         )
+    if OutputType.PODCAST in output_types:
+        parts.append(_template("podcast.txt"))
     if context.corrective_note:
         parts.append(f"IMPORTANT — your previous response was rejected: {context.corrective_note}")
     return "\n\n".join(parts)
@@ -111,6 +113,25 @@ def validate_questions(data, question_format):
                 or not 0 <= answer_index < len(choices)
             ):
                 problems.append(f"question {i}: 'answer_index' out of range")
+    return problems
+
+
+PODCAST_HOSTS = ("Alex", "Jordan")
+
+
+def validate_podcast_script(data):
+    if not isinstance(data, dict):
+        return ["podcast is not an object"]
+    problems = []
+    if not isinstance(data.get("title"), str) or not data["title"].strip():
+        problems.append("missing/invalid 'title'")
+    script = data.get("script")
+    if not isinstance(script, str) or not script.strip():
+        problems.append("missing/invalid 'script'")
+        return problems
+    for host in PODCAST_HOSTS:
+        if f"{host}:" not in script:
+            problems.append(f"script has no lines for host '{host}'")
     return problems
 
 
