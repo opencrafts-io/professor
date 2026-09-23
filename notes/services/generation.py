@@ -177,7 +177,7 @@ def run_generation_job(job_id, client=None, markdown_converter=None, tts_client=
             tts_provider=tts_client.provider,
             prompt_version=PROMPT_VERSION,
         )
-        podcast.audio.save("episode.wav", ContentFile(tts_result.audio_wav), save=True)
+        podcast.audio.save("episode.mp3", ContentFile(tts_result.audio_mp3), save=True)
         logger.info(
             "podcast tts job=%s note=%s provider=%s seconds=%.1f audio_tokens=%s",
             job.pk,

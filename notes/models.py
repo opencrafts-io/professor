@@ -113,7 +113,7 @@ class QuestionSet(models.Model):
 
 
 def podcast_upload_path(instance, filename):
-    return f"podcasts/{instance.note.owner.user_id}/{instance.note_id}/{uuid.uuid4().hex}.wav"
+    return f"podcasts/{instance.note.owner.user_id}/{instance.note_id}/{uuid.uuid4().hex}.mp3"
 
 
 class Podcast(models.Model):

@@ -314,8 +314,10 @@ def test_podcast_job_synthesizes_audio_and_persists(note, user):
     assert podcast.duration_seconds > 0
     assert podcast.tts_provider == "fake"
     assert podcast.audio.name.startswith(f"podcasts/{user.user_id}/{note.pk}/")
+    assert podcast.audio.name.endswith(".mp3")
     with podcast.audio.open("rb") as f:
-        assert f.read(4) == b"RIFF"
+        head = f.read(2)
+    assert head[0] == 0xFF and (head[1] & 0xE0) == 0xE0  # MPEG frame sync
 
 
 def test_tts_failure_fails_job_with_tts_code(note, user):

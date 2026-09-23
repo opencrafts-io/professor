@@ -2,7 +2,7 @@ from google import genai
 from google.genai import types
 
 from ..llm.base import PODCAST_HOSTS
-from .base import TTSResult, pcm_duration_seconds, pcm_to_wav
+from .base import TTSResult, pcm_duration_seconds, pcm_to_mp3
 
 _VOICES = dict(zip(PODCAST_HOSTS, ("Kore", "Puck")))
 
@@ -38,7 +38,7 @@ class GeminiTTSClient:
         pcm = response.candidates[0].content.parts[0].inline_data.data
         usage = response.usage_metadata
         return TTSResult(
-            audio_wav=pcm_to_wav(pcm),
+            audio_mp3=pcm_to_mp3(pcm),
             duration_seconds=pcm_duration_seconds(pcm),
             audio_tokens=usage.candidates_token_count or 0,
         )
