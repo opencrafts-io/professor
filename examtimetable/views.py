@@ -9,7 +9,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from courses.models import SemesterInfo, StudentCourseEnrollment
+from courses.models import SemesterInfo, StudentCourse
 
 from .auth import IngestAPIKeyPermission
 from professor.pagination import ResultsSetPagination
@@ -44,17 +44,16 @@ class StudentExamScheduleView(APIView):
                 {"error": "Student not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-        enrollments = StudentCourseEnrollment.objects.filter(student=student)
+        courses = StudentCourse.objects.filter(student=student, archived_at__isnull=True)
         if semester_id:
             try:
-                semester = SemesterInfo.objects.get(id=semester_id)
-                enrollments = enrollments.filter(semester=semester)
+                SemesterInfo.objects.get(id=semester_id)
             except SemesterInfo.DoesNotExist:
                 return Response(
                     {"error": "Semester not found"}, status=status.HTTP_404_NOT_FOUND
                 )
 
-        course_codes = [enrollment.course.course_code for enrollment in enrollments]
+        course_codes = courses.values_list("code", flat=True)
 
         exams = ExamSchedule.objects.filter(course_code__in=course_codes)
         if semester_id:
@@ -134,7 +133,7 @@ class ExamScheduleByCourseCodesView(APIView):
             if "NUR" in course_code or "NUP" in course_code:
                 course_code = course_code[:-1]
 
-            mod_course_code = "".join(f"{char}\s*" for char in course_code)
+            mod_course_code = "".join(rf"{char}\s*" for char in course_code)
 
             qs = ExamSchedule.objects.filter(
                 course_code__iregex=f".*{mod_course_code}.*",
@@ -240,7 +239,7 @@ class IngestExamScheduleView(APIView):
         skipped_count = 0
         for i, item_data in enumerate(items_data):
             course_code = item_data["course_code"]
-            inst = item_data["institution_id"]
+            inst = item_data["institution"]
             sem = item_data.get("semester")
 
             inst_id = inst.pk if inst else None
@@ -263,7 +262,7 @@ class IngestExamScheduleView(APIView):
             institution_ids = list(
                 set(
                     [
-                        item_data["institution_id"].pk
+                        item_data["institution"].pk
                         for _, item_data in deduplicated_items.values()
                     ]
                 )
@@ -275,7 +274,7 @@ class IngestExamScheduleView(APIView):
                 course_code__in=course_codes,
             )
             existing_map = {
-                (exam.institution_id_id, exam.semester_id, exam.course_code): exam
+                (exam.institution_id, exam.semester_id, exam.course_code): exam
                 for exam in existing_exams
             }
 

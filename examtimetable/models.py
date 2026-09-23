@@ -18,7 +18,7 @@ class ExamSchedule(models.Model):
     venue = models.CharField(max_length=255, null=False)
     coordinator = models.CharField(max_length=255, null=True, blank=True)
     hrs = models.CharField(max_length=10, null=False)
-    institution_id = models.ForeignKey(
+    institution = models.ForeignKey(
         Institution, on_delete=models.CASCADE, related_name="institution"
     )
 
@@ -29,13 +29,13 @@ class ExamSchedule(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["course_code", "institution_id", "semester"],
+                fields=["course_code", "institution", "semester"],
                 name="unique_exam_schedule",
                 nulls_distinct=False,
             )
         ]
         indexes = [
-            models.Index(fields=["institution_id", "semester", "course_code"]),
+            models.Index(fields=["institution", "semester", "course_code"]),
         ]
 
     def __str__(self):

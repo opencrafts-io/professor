@@ -13,10 +13,13 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
+        migrations.RemoveConstraint(
             model_name='examschedule',
-            new_name='examtimetab_institu_06de37_idx',
-            old_name='examtimetab_institu_6cadef_idx',
+            name='unique_exam_schedule',
+        ),
+        migrations.RemoveIndex(
+            model_name='examschedule',
+            name='examtimetab_institu_6cadef_idx',
         ),
         migrations.AlterField(
             model_name='examschedule',
@@ -33,7 +36,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='examschedule',
             name='institution_id',
-            field=models.ForeignKey(default=5426, on_delete=django.db.models.deletion.CASCADE, related_name='institution', to='institutions.institution'),
+            field=models.ForeignKey(db_column='institution_id', default=5426, on_delete=django.db.models.deletion.CASCADE, related_name='institution', to='institutions.institution'),
             preserve_default=False,
         ),
         migrations.AlterField(
@@ -47,5 +50,23 @@ class Migration(migrations.Migration):
             name='venue',
             field=models.CharField(default='Venue', max_length=255),
             preserve_default=False,
+        ),
+        migrations.RenameField(
+            model_name='examschedule',
+            old_name='institution_id',
+            new_name='institution',
+        ),
+        migrations.AlterField(
+            model_name='examschedule',
+            name='institution',
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='institution', to='institutions.institution'),
+        ),
+        migrations.AddIndex(
+            model_name='examschedule',
+            index=models.Index(fields=['institution', 'semester', 'course_code'], name='examtimetab_institu_6cadef_idx'),
+        ),
+        migrations.AddConstraint(
+            model_name='examschedule',
+            constraint=models.UniqueConstraint(fields=('course_code', 'institution', 'semester'), name='unique_exam_schedule', nulls_distinct=False),
         ),
     ]

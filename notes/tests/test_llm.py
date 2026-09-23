@@ -1,0 +1,212 @@
+from types import SimpleNamespace
+
+from notes.llm.base import (
+    DocumentSource,
+    GenerationContext,
+    OutputType,
+    build_prompt,
+    validate_summary,
+)
+from notes.llm.fake import FakeClient
+
+
+def test_fake_client_returns_valid_summary():
+    client = FakeClient()
+    result = client.generate(
+        DocumentSource(markdown="# notes"), [OutputType.SUMMARY], GenerationContext(course_name="Math")
+    )
+    summary = result.outputs[OutputType.SUMMARY]
+    assert validate_summary(summary) == []
+    assert result.input_tokens > 0
+    assert client.calls == [([OutputType.SUMMARY], GenerationContext(course_name="Math"))]
+
+
+def test_validate_summary_flags_problems():
+    problems = validate_summary({"title": 3, "sections": [{"heading": "h"}]})
+    assert any("title" in p for p in problems)
+    assert any("points" in p for p in problems)
+
+
+def test_build_prompt_includes_course_and_output_block():
+    prompt = build_prompt(
+        [OutputType.SUMMARY], GenerationContext(course_name="Math", course_code="MAT 2201")
+    )
+    assert "MAT 2201" in prompt
+    assert "summary" in prompt.lower()
+    assert "mobile" in prompt.lower()
+    assert "Academia is for you." in prompt
+
+
+def test_build_prompt_appends_corrective_note():
+    context = GenerationContext(corrective_note="previous response was missing 'title'")
+    prompt = build_prompt([OutputType.SUMMARY], context)
+    assert "missing 'title'" in prompt
+
+
+def test_build_prompt_includes_question_block_with_format_shape():
+    context = GenerationContext(question_format="mcq")
+    prompt = build_prompt([OutputType.QUESTIONS], context)
+    assert '"questions"' in prompt
+    assert "mcq" in prompt
+    assert "answer_index" in prompt
+    assert "summary" not in prompt.lower().replace("study artifact", "")
+
+
+def test_build_prompt_bundles_summary_and_questions_blocks():
+    context = GenerationContext(question_format="flashcard")
+    prompt = build_prompt([OutputType.SUMMARY, OutputType.QUESTIONS], context)
+    assert '"summary"' in prompt
+    assert '"questions"' in prompt
+    assert '"front"' in prompt
+
+
+def test_validate_questions_accepts_each_format():
+    from notes.llm.base import validate_questions
+
+    assert validate_questions([{"front": "Q", "back": "A"}], "flashcard") == []
+    assert (
+        validate_questions(
+            [
+                {
+                    "question": "Which law?",
+                    "choices": ["First", "Second", "Third", "Zeroth"],
+                    "answer_index": 1,
+                    "explanation": "F = ma is Newton's second law.",
+                }
+            ],
+            "mcq",
+        )
+        == []
+    )
+    assert (
+        validate_questions([{"question": "Explain inertia.", "model_answer": "..."}], "open_ended")
+        == []
+    )
+
+
+def test_build_prompt_includes_podcast_block_with_hosts():
+    prompt = build_prompt([OutputType.PODCAST], GenerationContext())
+    assert '"podcast"' in prompt
+    assert "Alex" in prompt and "Jordan" in prompt
+
+
+def test_validate_podcast_script_accepts_two_host_dialogue():
+    from notes.llm.base import validate_podcast_script
+
+    script = "Alex: Welcome to the show.\nJordan: Today we cover Fourier series.\nAlex: Let's go."
+    assert validate_podcast_script({"title": "Fourier basics", "script": script}) == []
+
+
+def test_validate_podcast_script_flags_problems():
+    from notes.llm.base import validate_podcast_script
+
+    assert validate_podcast_script(None) != []
+    assert any("title" in p for p in validate_podcast_script({"script": "Alex: hi\nJordan: yo"}))
+    assert any(
+        "script" in p for p in validate_podcast_script({"title": "t", "script": "   "})
+    )
+    # monologue missing the second host is rejected — TTS speaker mapping needs both
+    assert validate_podcast_script({"title": "t", "script": "Alex: all alone here"}) != []
+
+
+def test_validate_questions_flags_problems():
+    from notes.llm.base import validate_questions
+
+    assert validate_questions([], "flashcard") != []
+    assert validate_questions({"front": "not a list"}, "flashcard") != []
+    assert any("back" in p for p in validate_questions([{"front": "Q"}], "flashcard"))
+    assert any(
+        "answer_index" in p
+        for p in validate_questions(
+            [{"question": "q", "choices": ["a", "b"], "answer_index": 5, "explanation": "e"}],
+            "mcq",
+        )
+    )
+    assert validate_questions([{"front": "Q", "back": "A"}], "essay") != []
+
+
+def test_fake_client_plays_scripted_responses_in_order():
+    bad, good = {"title": 5}, {"title": "t", "sections": [{"heading": "h", "points": ["p"]}]}
+    client = FakeClient(script=[{OutputType.SUMMARY: bad}, {OutputType.SUMMARY: good}])
+    doc = DocumentSource(markdown="# notes")
+    first = client.generate(doc, [OutputType.SUMMARY], GenerationContext())
+    second = client.generate(doc, [OutputType.SUMMARY], GenerationContext())
+    assert first.outputs[OutputType.SUMMARY] == bad
+    assert second.outputs[OutputType.SUMMARY] == good
+
+
+def test_gemini_separates_system_instruction_from_source_material(settings, monkeypatch):
+    from notes.llm import gemini
+
+    calls = {}
+
+    class StubModels:
+        def generate_content(self, **kwargs):
+            calls.update(kwargs)
+            return SimpleNamespace(
+                text='{"summary": {"title": "t", "sections": []}}',
+                usage_metadata=SimpleNamespace(prompt_token_count=3, candidates_token_count=2),
+            )
+
+    monkeypatch.setattr(
+        gemini.genai, "Client", lambda api_key: SimpleNamespace(models=StubModels())
+    )
+    monkeypatch.setattr(
+        gemini,
+        "types",
+        SimpleNamespace(
+            GenerateContentConfig=lambda **kwargs: kwargs,
+        ),
+    )
+    monkeypatch.setattr(gemini, "build_prompt", lambda *_: "Generate a summary.")
+
+    gemini.GeminiClient("key").generate(
+        DocumentSource(markdown="# Lecture\n\nNewton's laws"),
+        [OutputType.SUMMARY],
+        GenerationContext(),
+    )
+
+    assert calls["config"]["system_instruction"] == "Generate a summary."
+    assert calls["config"]["response_mime_type"] == "application/json"
+    # No output cap: truncated JSON would fail parsing and misreport as a provider
+    # error; each output type's prompt bounds its own size instead.
+    assert "max_output_tokens" not in calls["config"]
+    assert len(calls["contents"]) == 1
+    assert "<source_document>" in calls["contents"][0]
+    assert "Newton's laws" in calls["contents"][0]
+
+
+def test_gemini_sends_native_pdf_when_document_has_no_markdown(monkeypatch):
+    from notes.llm import gemini
+
+    calls = {}
+
+    class StubModels:
+        def generate_content(self, **kwargs):
+            calls.update(kwargs)
+            return SimpleNamespace(
+                text='{"summary": {"title": "t", "sections": []}}',
+                usage_metadata=SimpleNamespace(prompt_token_count=3, candidates_token_count=2),
+            )
+
+    monkeypatch.setattr(
+        gemini.genai, "Client", lambda api_key: SimpleNamespace(models=StubModels())
+    )
+    monkeypatch.setattr(
+        gemini,
+        "types",
+        SimpleNamespace(
+            GenerateContentConfig=lambda **kwargs: kwargs,
+            Part=SimpleNamespace(
+                from_bytes=lambda *, data, mime_type: ("part", mime_type, data)
+            ),
+        ),
+    )
+    monkeypatch.setattr(gemini, "build_prompt", lambda *_: "Generate a summary.")
+
+    gemini.GeminiClient("key").generate(
+        DocumentSource(pdf_bytes=b"%PDF-scanned"), [OutputType.SUMMARY], GenerationContext()
+    )
+
+    assert calls["contents"] == [("part", "application/pdf", b"%PDF-scanned")]
+    assert calls["config"]["system_instruction"] == "Generate a summary."

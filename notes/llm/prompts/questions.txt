@@ -1,0 +1,4 @@
+Output key "questions": a JSON array of 10-15 practice questions in "{question_format}" format. Each element exactly:
+{question_shape}
+
+Base every question and its answer only on the source document. Cover its whole breadth, mix difficulty from simple recall to application, and never duplicate a question.

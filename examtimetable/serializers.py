@@ -21,7 +21,7 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "venue",
             "coordinator",
             "hrs",
-            "institution_id",
+            "institution",
             "raw_data",
             "created_at",
             "updated_at",
