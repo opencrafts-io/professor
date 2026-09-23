@@ -1,4 +1,5 @@
 import logging
+import re
 
 from datetime import timedelta
 from django.db import transaction
@@ -19,6 +20,11 @@ from .models import ExamSchedule
 from .serializers import ExamScheduleSerializer
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_course_code(value):
+    """Uppercase and strip all whitespace, so 'cs 101' == 'CS101'."""
+    return re.sub(r"\s+", "", value or "").upper()
 
 
 class StudentExamScheduleView(APIView):
@@ -44,7 +50,11 @@ class StudentExamScheduleView(APIView):
                 {"error": "Student not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-        courses = StudentCourse.objects.filter(student=student, archived_at__isnull=True)
+        courses = (
+            StudentCourse.objects.filter(student=student, archived_at__isnull=True)
+            .exclude(code__isnull=True)
+            .exclude(code="")
+        )
         if semester_id:
             try:
                 SemesterInfo.objects.get(id=semester_id)
@@ -53,9 +63,23 @@ class StudentExamScheduleView(APIView):
                     {"error": "Semester not found"}, status=status.HTTP_404_NOT_FOUND
                 )
 
-        course_codes = courses.values_list("code", flat=True)
+        course_keys = {
+            (course.institution_id, normalize_course_code(course.code))
+            for course in courses
+        }
 
-        exams = ExamSchedule.objects.filter(course_code__in=course_codes)
+        if not course_keys:
+            exams = ExamSchedule.objects.none()
+        else:
+            institution_ids = {institution_id for institution_id, _ in course_keys}
+            candidates = ExamSchedule.objects.filter(institution_id__in=institution_ids)
+            matching_ids = [
+                exam.pk
+                for exam in candidates
+                if (exam.institution_id, normalize_course_code(exam.course_code))
+                in course_keys
+            ]
+            exams = ExamSchedule.objects.filter(pk__in=matching_ids)
         if semester_id:
             exams = exams.filter(semester_id=semester_id)
         else:
