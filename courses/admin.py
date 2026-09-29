@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Lecturer, StudentCourse
+from .models import Lecturer, ScheduleEntry, StudentCourse
 
 
 @admin.register(StudentCourse)
@@ -11,3 +11,15 @@ class StudentCourseAdmin(admin.ModelAdmin):
 @admin.register(Lecturer)
 class LecturerAdmin(admin.ModelAdmin):
     list_display = ("name", "student_course", "email", "phone")
+
+
+@admin.register(ScheduleEntry)
+class ScheduleEntryAdmin(admin.ModelAdmin):
+    list_display = (
+        "student_course",
+        "day_of_week",
+        "start_time",
+        "end_time",
+        "label",
+        "venue",
+    )

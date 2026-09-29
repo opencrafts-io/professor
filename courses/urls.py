@@ -23,6 +23,21 @@ urlpatterns = [
         name="lecturer-create",
     ),
     path(
+        "<uuid:id>/schedule/",
+        views.ScheduleEntryCreateView.as_view(),
+        name="schedule-entry-create",
+    ),
+    path(
+        "schedule/student/",
+        views.StudentTimetableView.as_view(),
+        name="student-timetable",
+    ),
+    path(
+        "schedule/<uuid:id>/",
+        views.ScheduleEntryDetailView.as_view(),
+        name="schedule-entry-detail",
+    ),
+    path(
         "lecturers/<uuid:id>/",
         views.LecturerDetailView.as_view(),
         name="lecturer-detail",
