@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from rest_framework import status
 from rest_framework.generics import (
     CreateAPIView,
     ListAPIView,
@@ -13,19 +14,45 @@ from rest_framework.views import APIView
 from professor.pagination import ResultsSetPagination
 from users.models import StudentProfile
 
-from .models import Lecturer, SemesterInfo, StudentCourse
-from .serializers import LecturerSerializer, SemesterInfoSerializer, StudentCourseSerializer
+from .models import Lecturer, ScheduleEntry, SemesterInfo, StudentCourse
+from .serializers import (
+    LecturerSerializer,
+    ScheduleEntrySerializer,
+    SemesterInfoSerializer,
+    StudentCourseSerializer,
+    StudentTimetableEntrySerializer,
+)
 
 
 class StudentCourseCreateView(CreateAPIView):
     serializer_class = StudentCourseSerializer
 
-    def perform_create(self, serializer):
+    def get_student(self):
         try:
-            student = StudentProfile.objects.get(user=self.request.user)
+            return StudentProfile.objects.get(user=self.request.user)
         except StudentProfile.DoesNotExist:
             raise NotFound("Student profile not found")
+
+    def create(self, request, *args, **kwargs):
+        student = self.get_student()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        idempotency_key = serializer.validated_data.get("idempotency_key")
+        if idempotency_key is not None:
+            existing = StudentCourse.objects.filter(
+                student=student, idempotency_key=idempotency_key
+            ).first()
+            if existing is not None:
+                return Response(
+                    self.get_serializer(existing).data, status=status.HTTP_200_OK
+                )
+
         serializer.save(student=student)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
 
 
 class StudentCourseListView(ListAPIView):
@@ -116,6 +143,71 @@ class LecturerDetailView(APIView):
         lecturer = self.get_object()
         lecturer.delete()
         return Response(status=204)
+
+
+class ScheduleEntryCreateView(APIView):
+    def post(self, request, id):
+        course = get_object_or_404(StudentCourse, pk=id)
+        if (
+            course.student.user_id != request.user.user_id
+            and not getattr(request.user, "is_staff", False)
+        ):
+            raise PermissionDenied("You don't have permission to manage this course")
+
+        serializer = ScheduleEntrySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        idempotency_key = serializer.validated_data.get("idempotency_key")
+        if idempotency_key is not None:
+            existing = ScheduleEntry.objects.filter(
+                student_course=course, idempotency_key=idempotency_key
+            ).first()
+            if existing is not None:
+                return Response(
+                    ScheduleEntrySerializer(existing).data, status=status.HTTP_200_OK
+                )
+
+        entry = serializer.save(student_course=course)
+        return Response(
+            ScheduleEntrySerializer(entry).data, status=status.HTTP_201_CREATED
+        )
+
+
+class ScheduleEntryDetailView(APIView):
+    def get_object(self):
+        entry = get_object_or_404(ScheduleEntry, pk=self.kwargs["id"])
+        if (
+            entry.student_course.student.user_id != self.request.user.user_id
+            and not getattr(self.request.user, "is_staff", False)
+        ):
+            raise PermissionDenied("You don't have permission to manage this schedule")
+        return entry
+
+    def patch(self, request, id):
+        serializer = ScheduleEntrySerializer(
+            self.get_object(), data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        return Response(ScheduleEntrySerializer(serializer.save()).data)
+
+    def delete(self, request, id):
+        entry = self.get_object()
+        entry.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StudentTimetableView(ListAPIView):
+    serializer_class = StudentTimetableEntrySerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        try:
+            student = StudentProfile.objects.get(user=self.request.user)
+        except StudentProfile.DoesNotExist:
+            raise NotFound("Student profile not found")
+        return ScheduleEntry.objects.filter(
+            student_course__student=student,
+            student_course__archived_at__isnull=True,
+        ).select_related("student_course")
 
 
 class SemesterListView(ListAPIView):
