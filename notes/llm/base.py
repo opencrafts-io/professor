@@ -89,7 +89,8 @@ def build_prompt(output_types, context):
             else ""
         )
         plan_shape = (
-            '{"topics": [{"name": "topic", "priority": 1, "suggested_minutes": 90}]}'
+            '{"study_plan": {"topics": '
+            '[{"name": "topic", "priority": 1, "suggested_minutes": 90}]}}'
         )
         parts.append(
             _template("study_plan.txt").format(plan_shape=plan_shape, term_note=term_note)

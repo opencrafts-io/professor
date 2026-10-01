@@ -1,4 +1,4 @@
-Output key "study_plan": a revision plan built from ALL the source material, matching exactly:
+Output key "study_plan": a revision plan built from ALL the source material. The response must contain:
 {plan_shape}
 
 Rules:
@@ -6,4 +6,5 @@ Rules:
 - priority is 1 for the most urgent topic, counting up; weight topics that are
   foundational, heavily covered, or explicitly flagged as examinable.
 - suggested_minutes is a realistic focused-study estimate (15-180 per topic).
+- Draw topics from every source document — no document may be left unrepresented.
 {term_note}
