@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import GenerationJob, Note, Podcast, QuestionSet, Summary
+from .models import GenerationJob, Note, Podcast, QuestionSet, StudyPlan, Summary
 
 
 class NoteSerializer(serializers.ModelSerializer):
@@ -60,6 +60,19 @@ class QuestionSetSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuestionSet
         fields = ["id", "format", "generated_at", "questions"]
+
+
+class StudyPlanSerializer(serializers.ModelSerializer):
+    course_id = serializers.UUIDField(source="course.pk", allow_null=True, default=None)
+    note_ids = serializers.SerializerMethodField()
+    status = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = StudyPlan
+        fields = ["id", "course_id", "note_ids", "status", "topics", "generated_at"]
+
+    def get_note_ids(self, plan):
+        return list(plan.notes.values_list("pk", flat=True))
 
 
 class PodcastSerializer(serializers.ModelSerializer):
