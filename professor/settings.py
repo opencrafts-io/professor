@@ -119,8 +119,10 @@ CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower(
 
 INGEST_API_KEY = _require_env("INGEST_API_KEY")
 
-# AI feature entitlements: "stub-allow" until the Verisafe contract is captured.
+# AI feature entitlements: "verisafe" checks GET {VERISAFE_URL}/subscriptions/me
+# with the caller's own JWT; "stub-allow" grants everyone (dev/test only).
 AI_ENTITLEMENT_MODE = os.getenv("AI_ENTITLEMENT_MODE", "stub-allow")
+VERISAFE_URL = os.getenv("VERISAFE_URL", "").rstrip("/")
 
 # LLM backend: "gemini" in real deployments, "fake" in tests (set by conftest).
 # Key is worker-only, so absence must not block web boot — checked at use time.
