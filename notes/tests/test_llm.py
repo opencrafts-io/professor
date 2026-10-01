@@ -109,6 +109,57 @@ def test_validate_podcast_script_flags_problems():
     assert validate_podcast_script({"title": "t", "script": "Alex: all alone here"}) != []
 
 
+def test_build_prompt_includes_study_plan_block():
+    prompt = build_prompt([OutputType.STUDY_PLAN], GenerationContext())
+    assert '"study_plan"' in prompt
+    assert "priority" in prompt
+    assert "suggested_minutes" in prompt
+
+
+def test_build_prompt_mentions_term_end_only_when_known():
+    with_term = build_prompt(
+        [OutputType.STUDY_PLAN], GenerationContext(term_end="2026-12-15")
+    )
+    without_term = build_prompt([OutputType.STUDY_PLAN], GenerationContext())
+    assert "2026-12-15" in with_term
+    assert "term ends" not in without_term.lower()
+
+
+def test_validate_study_plan_accepts_topic_list():
+    from notes.llm.base import validate_study_plan
+
+    plan = {
+        "topics": [
+            {"name": "Fourier series", "priority": 1, "suggested_minutes": 90},
+            {"name": "Laplace transforms", "priority": 2, "suggested_minutes": 60},
+        ]
+    }
+    assert validate_study_plan(plan) == []
+
+
+def test_validate_study_plan_flags_problems():
+    from notes.llm.base import validate_study_plan
+
+    assert validate_study_plan(None) != []
+    assert validate_study_plan({"topics": []}) != []
+    assert any(
+        "name" in p
+        for p in validate_study_plan({"topics": [{"priority": 1, "suggested_minutes": 5}]})
+    )
+    assert any(
+        "priority" in p
+        for p in validate_study_plan(
+            {"topics": [{"name": "x", "priority": 0, "suggested_minutes": 5}]}
+        )
+    )
+    assert any(
+        "suggested_minutes" in p
+        for p in validate_study_plan(
+            {"topics": [{"name": "x", "priority": 1, "suggested_minutes": "long"}]}
+        )
+    )
+
+
 def test_validate_questions_flags_problems():
     from notes.llm.base import validate_questions
 

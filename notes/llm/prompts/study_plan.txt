@@ -1,0 +1,9 @@
+Output key "study_plan": a revision plan built from ALL the source material, matching exactly:
+{plan_shape}
+
+Rules:
+- One topic per distinct subject area found across the documents; 5-12 topics.
+- priority is 1 for the most urgent topic, counting up; weight topics that are
+  foundational, heavily covered, or explicitly flagged as examinable.
+- suggested_minutes is a realistic focused-study estimate (15-180 per topic).
+{term_note}
