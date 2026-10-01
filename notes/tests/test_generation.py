@@ -346,6 +346,141 @@ def test_invalid_podcast_script_fails_after_retry(note, user):
     assert job.failure_code == GenerationJob.FAILURE_INVALID_OUTPUT
 
 
+TOPICS = {
+    "topics": [
+        {"name": "Routing", "priority": 1, "suggested_minutes": 90},
+        {"name": "Dispatch flows", "priority": 2, "suggested_minutes": 60},
+    ]
+}
+
+
+def _plan_with_notes(user, contents):
+    from notes.models import StudyPlan
+
+    notes = []
+    for i, body in enumerate(contents):
+        note = Note(owner=user, original_filename=f"n{i}.docx", size_bytes=len(body))
+        note.file.save(f"n{i}.docx", ContentFile(body), save=True)
+        notes.append(note)
+    plan = StudyPlan.objects.create(owner=user)
+    plan.notes.set(notes)
+    return plan, notes
+
+
+class PerFileConverter:
+    def __init__(self, failing=None):
+        self._failing = failing
+
+    def to_markdown(self, file_bytes, filename):
+        from notes.convert.base import ConversionError
+
+        if filename == self._failing:
+            raise ConversionError("no extractable text")
+        return f"content of {filename}"
+
+
+def test_study_plan_job_combines_notes_and_persists_topics(user):
+    plan, notes = _plan_with_notes(user, [b"PK\x03\x04 a", b"PK\x03\x04 b"])
+    job = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
+    client = FakeClient(responses={OutputType.STUDY_PLAN: TOPICS})
+    run_generation_job(job.pk, client=client, markdown_converter=PerFileConverter())
+    job.refresh_from_db()
+    plan.refresh_from_db()
+    assert job.status == GenerationJob.DONE
+    document = client.document_text_seen[0]
+    assert "n0.docx" in document and "content of n0.docx" in document
+    assert "n1.docx" in document and "content of n1.docx" in document
+    assert plan.topics == TOPICS["topics"]
+    assert plan.generated_at is not None
+    assert plan.prompt_version == PROMPT_VERSION
+
+
+def test_study_plan_context_uses_course_and_term_end(user):
+    from courses.models import StudentCourse
+    from institutions.models import Institution
+    from users.models import StudentProfile
+
+    institution = Institution.objects.create(
+        name="Academia University",
+        web_pages=["https://academia.example"],
+        domains=["academia.example"],
+        country="Kenya",
+    )
+    student = StudentProfile.objects.create(user=user, student_id="student-002")
+    course = StudentCourse.objects.create(
+        student=student,
+        institution=institution,
+        code="ACS 400",
+        title="Computer Science Project",
+        term_end_date="2026-12-15",
+    )
+    plan, _ = _plan_with_notes(user, [b"PK\x03\x04 a"])
+    plan.course = course
+    plan.save()
+    job = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
+    client = FakeClient(responses={OutputType.STUDY_PLAN: TOPICS})
+    run_generation_job(job.pk, client=client, markdown_converter=PerFileConverter())
+    _, context = client.calls[0]
+    assert context.course_name == "Computer Science Project"
+    assert context.course_code == "ACS 400"
+    assert context.term_end == "2026-12-15"
+
+
+def test_study_plan_conversion_failure_names_the_note(user):
+    plan, _ = _plan_with_notes(user, [b"PK\x03\x04 a", b"PK\x03\x04 b"])
+    job = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
+    client = FakeClient()
+    run_generation_job(
+        job.pk, client=client, markdown_converter=PerFileConverter(failing="n1.docx")
+    )
+    job.refresh_from_db()
+    assert job.status == GenerationJob.FAILED
+    assert job.failure_code == GenerationJob.FAILURE_CONVERSION
+    assert "n1.docx" in job.failure_message
+    assert client.calls == []
+
+
+def test_study_plan_combined_markdown_cap_applies(user, settings):
+    settings.NOTES_MAX_MARKDOWN_CHARS = 30
+    plan, _ = _plan_with_notes(user, [b"PK\x03\x04 a", b"PK\x03\x04 b"])
+    job = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
+    run_generation_job(job.pk, client=FakeClient(), markdown_converter=PerFileConverter())
+    job.refresh_from_db()
+    assert job.status == GenerationJob.FAILED
+    assert job.failure_code == GenerationJob.FAILURE_CONVERSION
+
+
+def test_regenerating_replaces_topics_in_place(user):
+    plan, _ = _plan_with_notes(user, [b"PK\x03\x04 a"])
+    job1 = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
+    run_generation_job(
+        job1.pk,
+        client=FakeClient(responses={OutputType.STUDY_PLAN: TOPICS}),
+        markdown_converter=PerFileConverter(),
+    )
+    new_topics = {"topics": [{"name": "Only one", "priority": 1, "suggested_minutes": 30}]}
+    job2 = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
+    run_generation_job(
+        job2.pk,
+        client=FakeClient(responses={OutputType.STUDY_PLAN: new_topics}),
+        markdown_converter=PerFileConverter(),
+    )
+    plan.refresh_from_db()
+    assert plan.topics == new_topics["topics"]
+
+
 def test_worker_task_runs_job(job, settings):
     settings.AI_LLM_BACKEND = "fake"
     from notes.tasks import run_generation

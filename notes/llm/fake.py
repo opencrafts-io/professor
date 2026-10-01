@@ -12,6 +12,10 @@ _DEFAULT_PODCAST = {
     "script": "Alex: Welcome to the show.\nJordan: Today we recap the key ideas.",
 }
 
+_DEFAULT_STUDY_PLAN = {
+    "topics": [{"name": "Key ideas", "priority": 1, "suggested_minutes": 45}]
+}
+
 
 class FakeClient:
     def __init__(self, responses=None, script=None, input_tokens=10, output_tokens=5):
@@ -19,6 +23,7 @@ class FakeClient:
             OutputType.SUMMARY: _DEFAULT_SUMMARY,
             OutputType.QUESTIONS: _DEFAULT_QUESTIONS,
             OutputType.PODCAST: _DEFAULT_PODCAST,
+            OutputType.STUDY_PLAN: _DEFAULT_STUDY_PLAN,
         }
         self._script = list(script) if script else None
         self._input_tokens = input_tokens
