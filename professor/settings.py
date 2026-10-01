@@ -274,6 +274,15 @@ STORAGES = {
     },
 }
 
+# Local development without S3: files land under media/ and are served by
+# runserver (DEBUG only). Never enable in a deployed environment.
+MEDIA_ROOT = BASE_DIR / "media"
+if os.getenv("LOCAL_MEDIA", "false").lower() == "true":
+    STORAGES["default"] = {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": str(MEDIA_ROOT), "base_url": MEDIA_URL},
+    }
+
 
 # File upload settings for large images
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
