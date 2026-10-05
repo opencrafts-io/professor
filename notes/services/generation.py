@@ -71,7 +71,7 @@ def _context_for(job):
     )
 
 
-def _validate_outputs(result, output_types, question_format):
+def _validate_outputs(result, output_types, question_format, valid_note_ids=None):
     problems = []
     if OutputType.SUMMARY in output_types:
         summary_problems = validate_summary(result.outputs.get(OutputType.SUMMARY))
@@ -85,7 +85,9 @@ def _validate_outputs(result, output_types, question_format):
         podcast_problems = validate_podcast_script(result.outputs.get(OutputType.PODCAST))
         problems.extend(f"podcast: {p}" for p in podcast_problems)
     if OutputType.STUDY_PLAN in output_types:
-        plan_problems = validate_study_plan(result.outputs.get(OutputType.STUDY_PLAN))
+        plan_problems = validate_study_plan(
+            result.outputs.get(OutputType.STUDY_PLAN), valid_note_ids=valid_note_ids
+        )
         problems.extend(f"study_plan: {p}" for p in plan_problems)
     return problems
 
@@ -114,7 +116,7 @@ def _document_for_plan(plan, markdown_converter):
                 raise ConversionError(f"{note.original_filename}: {exc}") from exc
             note.converted_markdown = markdown
             note.save(update_fields=["converted_markdown"])
-        sections.append(f"# Note: {note.original_filename}\n\n{markdown}")
+        sections.append(f"# Note {note.pk}: {note.original_filename}\n\n{markdown}")
     combined = "\n\n---\n\n".join(sections)
     if len(combined) > settings.NOTES_MAX_MARKDOWN_CHARS:
         raise ConversionError("Combined notes exceed the Markdown input limit.")
@@ -170,6 +172,9 @@ def run_generation_job(job_id, client=None, markdown_converter=None, tts_client=
     client = client or get_llm_client()
     output_types = [OutputType(o) for o in job.requested_outputs]
     context = _context_for(job)
+    valid_note_ids = (
+        set(job.study_plan.notes.values_list("pk", flat=True)) if job.study_plan else None
+    )
 
     input_tokens = output_tokens = 0
     started = time.monotonic()
@@ -181,7 +186,7 @@ def run_generation_job(job_id, client=None, markdown_converter=None, tts_client=
             return
         input_tokens += result.input_tokens
         output_tokens += result.output_tokens
-        problems = _validate_outputs(result, output_types, job.question_format)
+        problems = _validate_outputs(result, output_types, job.question_format, valid_note_ids)
         if not problems:
             break
         if attempt == 0:

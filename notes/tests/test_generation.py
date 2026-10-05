@@ -346,12 +346,23 @@ def test_invalid_podcast_script_fails_after_retry(note, user):
     assert job.failure_code == GenerationJob.FAILURE_INVALID_OUTPUT
 
 
-TOPICS = {
-    "topics": [
-        {"name": "Routing", "priority": 1, "suggested_minutes": 90},
-        {"name": "Dispatch flows", "priority": 2, "suggested_minutes": 60},
-    ]
-}
+def _topics_for(notes):
+    return {
+        "topics": [
+            {
+                "name": "Routing",
+                "priority": 1,
+                "suggested_minutes": 90,
+                "source_note_ids": [notes[0].pk],
+            },
+            {
+                "name": "Dispatch flows",
+                "priority": 2,
+                "suggested_minutes": 60,
+                "source_note_ids": [n.pk for n in notes],
+            },
+        ]
+    }
 
 
 def _plan_with_notes(user, contents):
@@ -381,20 +392,41 @@ class PerFileConverter:
 
 def test_study_plan_job_combines_notes_and_persists_topics(user):
     plan, notes = _plan_with_notes(user, [b"PK\x03\x04 a", b"PK\x03\x04 b"])
+    topics = _topics_for(notes)
     job = GenerationJob.objects.create(
         owner=user, study_plan=plan, requested_outputs=["study_plan"]
     )
-    client = FakeClient(responses={OutputType.STUDY_PLAN: TOPICS})
+    client = FakeClient(responses={OutputType.STUDY_PLAN: topics})
     run_generation_job(job.pk, client=client, markdown_converter=PerFileConverter())
     job.refresh_from_db()
     plan.refresh_from_db()
     assert job.status == GenerationJob.DONE
     document = client.document_text_seen[0]
-    assert "n0.docx" in document and "content of n0.docx" in document
-    assert "n1.docx" in document and "content of n1.docx" in document
-    assert plan.topics == TOPICS["topics"]
+    # headers carry the note id so the model can cite sources unambiguously
+    assert f"# Note {notes[0].pk}: n0.docx" in document and "content of n0.docx" in document
+    assert f"# Note {notes[1].pk}: n1.docx" in document and "content of n1.docx" in document
+    assert plan.topics == topics["topics"]
+    assert plan.topics[0]["source_note_ids"] == [notes[0].pk]
     assert plan.generated_at is not None
     assert plan.prompt_version == PROMPT_VERSION
+
+
+def test_study_plan_rejects_hallucinated_source_ids(user):
+    plan, notes = _plan_with_notes(user, [b"PK\x03\x04 a"])
+    bad = {
+        "topics": [
+            {"name": "x", "priority": 1, "suggested_minutes": 30, "source_note_ids": [999999]}
+        ]
+    }
+    job = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
+    client = FakeClient(script=[{OutputType.STUDY_PLAN: bad}, {OutputType.STUDY_PLAN: bad}])
+    run_generation_job(job.pk, client=client, markdown_converter=PerFileConverter())
+    job.refresh_from_db()
+    assert job.status == GenerationJob.FAILED
+    assert job.failure_code == GenerationJob.FAILURE_INVALID_OUTPUT
+    assert "source_note_ids" in job.failure_message
 
 
 def test_study_plan_context_uses_course_and_term_end(user):
@@ -416,13 +448,13 @@ def test_study_plan_context_uses_course_and_term_end(user):
         title="Computer Science Project",
         term_end_date="2026-12-15",
     )
-    plan, _ = _plan_with_notes(user, [b"PK\x03\x04 a"])
+    plan, notes = _plan_with_notes(user, [b"PK\x03\x04 a"])
     plan.course = course
     plan.save()
     job = GenerationJob.objects.create(
         owner=user, study_plan=plan, requested_outputs=["study_plan"]
     )
-    client = FakeClient(responses={OutputType.STUDY_PLAN: TOPICS})
+    client = FakeClient(responses={OutputType.STUDY_PLAN: _topics_for(notes)})
     run_generation_job(job.pk, client=client, markdown_converter=PerFileConverter())
     _, context = client.calls[0]
     assert context.course_name == "Computer Science Project"
@@ -459,16 +491,25 @@ def test_study_plan_combined_markdown_cap_applies(user, settings):
 
 
 def test_regenerating_replaces_topics_in_place(user):
-    plan, _ = _plan_with_notes(user, [b"PK\x03\x04 a"])
+    plan, notes = _plan_with_notes(user, [b"PK\x03\x04 a"])
     job1 = GenerationJob.objects.create(
         owner=user, study_plan=plan, requested_outputs=["study_plan"]
     )
     run_generation_job(
         job1.pk,
-        client=FakeClient(responses={OutputType.STUDY_PLAN: TOPICS}),
+        client=FakeClient(responses={OutputType.STUDY_PLAN: _topics_for(notes)}),
         markdown_converter=PerFileConverter(),
     )
-    new_topics = {"topics": [{"name": "Only one", "priority": 1, "suggested_minutes": 30}]}
+    new_topics = {
+        "topics": [
+            {
+                "name": "Only one",
+                "priority": 1,
+                "suggested_minutes": 30,
+                "source_note_ids": [notes[0].pk],
+            }
+        ]
+    }
     job2 = GenerationJob.objects.create(
         owner=user, study_plan=plan, requested_outputs=["study_plan"]
     )

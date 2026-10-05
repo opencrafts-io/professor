@@ -7,4 +7,6 @@ Rules:
   foundational, heavily covered, or explicitly flagged as examinable.
 - suggested_minutes is a realistic focused-study estimate (15-180 per topic).
 - Draw topics from every source document — no document may be left unrepresented.
+- source_note_ids lists which documents a topic draws from, using the numeric ids
+  from the "# Note <id>:" headings; every topic cites at least one.
 {term_note}

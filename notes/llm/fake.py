@@ -12,19 +12,26 @@ _DEFAULT_PODCAST = {
     "script": "Alex: Welcome to the show.\nJordan: Today we recap the key ideas.",
 }
 
-_DEFAULT_STUDY_PLAN = {
-    "topics": [{"name": "Key ideas", "priority": 1, "suggested_minutes": 45}]
-}
+def _default_study_plan(document_markdown):
+    # Cite the real note ids from the combined document's headers, like the model would.
+    import re
+
+    ids = [int(m) for m in re.findall(r"^# Note (\d+):", document_markdown, re.MULTILINE)]
+    return {
+        "topics": [
+            {
+                "name": "Key ideas",
+                "priority": 1,
+                "suggested_minutes": 45,
+                "source_note_ids": ids or [1],
+            }
+        ]
+    }
 
 
 class FakeClient:
     def __init__(self, responses=None, script=None, input_tokens=10, output_tokens=5):
-        self._responses = responses or {
-            OutputType.SUMMARY: _DEFAULT_SUMMARY,
-            OutputType.QUESTIONS: _DEFAULT_QUESTIONS,
-            OutputType.PODCAST: _DEFAULT_PODCAST,
-            OutputType.STUDY_PLAN: _DEFAULT_STUDY_PLAN,
-        }
+        self._responses = responses
         self._script = list(script) if script else None
         self._input_tokens = input_tokens
         self._output_tokens = output_tokens
@@ -38,7 +45,15 @@ class FakeClient:
             self.document_text_seen.append(document.markdown)
         if document.pdf_bytes:
             self.document_pdf_seen.append(document.pdf_bytes)
-        responses = self._script.pop(0) if self._script else self._responses
+        defaults = {
+            OutputType.SUMMARY: _DEFAULT_SUMMARY,
+            OutputType.QUESTIONS: _DEFAULT_QUESTIONS,
+            OutputType.PODCAST: _DEFAULT_PODCAST,
+            OutputType.STUDY_PLAN: _default_study_plan(document.markdown),
+        }
+        responses = (
+            self._script.pop(0) if self._script else (self._responses or defaults)
+        )
         outputs = {t: responses[t] for t in output_types if t in responses}
         return GenerationResult(
             outputs=outputs, input_tokens=self._input_tokens, output_tokens=self._output_tokens

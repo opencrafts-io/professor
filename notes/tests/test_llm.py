@@ -130,11 +130,11 @@ def test_validate_study_plan_accepts_topic_list():
 
     plan = {
         "topics": [
-            {"name": "Fourier series", "priority": 1, "suggested_minutes": 90},
-            {"name": "Laplace transforms", "priority": 2, "suggested_minutes": 60},
+            {"name": "Fourier series", "priority": 1, "suggested_minutes": 90, "source_note_ids": [41]},
+            {"name": "Laplace transforms", "priority": 2, "suggested_minutes": 60, "source_note_ids": [41, 45]},
         ]
     }
-    assert validate_study_plan(plan) == []
+    assert validate_study_plan(plan, valid_note_ids={41, 45}) == []
 
 
 def test_validate_study_plan_flags_problems():
@@ -144,20 +144,43 @@ def test_validate_study_plan_flags_problems():
     assert validate_study_plan({"topics": []}) != []
     assert any(
         "name" in p
-        for p in validate_study_plan({"topics": [{"priority": 1, "suggested_minutes": 5}]})
+        for p in validate_study_plan(
+            {"topics": [{"priority": 1, "suggested_minutes": 5, "source_note_ids": [1]}]}
+        )
     )
     assert any(
         "priority" in p
         for p in validate_study_plan(
-            {"topics": [{"name": "x", "priority": 0, "suggested_minutes": 5}]}
+            {"topics": [{"name": "x", "priority": 0, "suggested_minutes": 5, "source_note_ids": [1]}]}
         )
     )
     assert any(
         "suggested_minutes" in p
         for p in validate_study_plan(
-            {"topics": [{"name": "x", "priority": 1, "suggested_minutes": "long"}]}
+            {"topics": [{"name": "x", "priority": 1, "suggested_minutes": "long", "source_note_ids": [1]}]}
         )
     )
+
+
+def test_validate_study_plan_checks_source_note_ids():
+    from notes.llm.base import validate_study_plan
+
+    topic = {"name": "x", "priority": 1, "suggested_minutes": 30}
+    # missing or empty sources
+    assert any("source_note_ids" in p for p in validate_study_plan({"topics": [topic]}))
+    assert any(
+        "source_note_ids" in p
+        for p in validate_study_plan({"topics": [{**topic, "source_note_ids": []}]})
+    )
+    # a cited id that is not one of the plan's notes is a hallucination
+    assert any(
+        "source_note_ids" in p
+        for p in validate_study_plan(
+            {"topics": [{**topic, "source_note_ids": [999]}]}, valid_note_ids={41}
+        )
+    )
+    # without a valid set (shape-only check), well-formed ids pass
+    assert validate_study_plan({"topics": [{**topic, "source_note_ids": [41]}]}) == []
 
 
 def test_validate_questions_flags_problems():
