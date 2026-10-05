@@ -289,7 +289,10 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 
 NOTES_MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB cap for note PDFs
-NOTES_MAX_MARKDOWN_CHARS = 250_000  # avoids unbounded LLM input from an accepted upload
+# Caps LLM input (single note, or all notes combined in a study plan).
+# 1M chars ≈ 250k tokens ≈ $0.075 per call at Flash-Lite rates; three ordinary
+# project documents measured ~272k chars together, so 250k was too tight.
+NOTES_MAX_MARKDOWN_CHARS = 1_000_000
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
 
 # HTTPS Configuration
