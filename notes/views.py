@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -9,12 +10,13 @@ from professor.pagination import ResultsSetPagination
 
 from .errors import APIError, ErrorCode, NotesAPIView
 from .llm.base import QUESTION_FORMATS, OutputType
-from .models import GenerationJob, Note
+from .models import GenerationJob, Note, StudyPlan
 from .serializers import (
     GenerationJobSerializer,
     NoteSerializer,
     PodcastSerializer,
     QuestionSetSerializer,
+    StudyPlanSerializer,
     SummarySerializer,
 )
 from .services.entitlements import HasAIEntitlement
@@ -112,7 +114,7 @@ class NoteDetailView(NotesAPIView):
             "summary": note.summaries.exists(),
             "questions": sorted(set(note.question_sets.values_list("format", flat=True))),
             "podcast": note.podcasts.exists(),
-            "study_plans": [],  # wk6
+            "study_plans": list(note.study_plans.values_list("pk", flat=True)),
         }
         return Response(data)
 
@@ -201,6 +203,95 @@ class NotePodcastView(NotesAPIView):
                 "No podcast exists for this note yet.", code=ErrorCode.NOT_FOUND, status_code=404
             )
         return Response(PodcastSerializer(podcast, context={"request": request}).data)
+
+
+def get_owned_plan(request, pk):
+    plan = StudyPlan.objects.filter(pk=pk, owner=request.user).first()
+    if plan is None:
+        raise APIError("Study plan not found.", code=ErrorCode.NOT_FOUND, status_code=404)
+    return plan
+
+
+def _dispatch_plan_job(request, plan):
+    in_flight = plan.jobs.filter(
+        status__in=[GenerationJob.PENDING, GenerationJob.PROCESSING]
+    ).exists()
+    if in_flight:
+        raise APIError(
+            "A generation job for this study plan is already running.",
+            code=ErrorCode.JOB_ALREADY_RUNNING,
+            status_code=409,
+        )
+    job = GenerationJob.objects.create(
+        owner=request.user, study_plan=plan, requested_outputs=[OutputType.STUDY_PLAN.value]
+    )
+    run_generation.delay(job.pk)
+    return job
+
+
+class StudyPlanCreateView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def post(self, request):
+        note_ids = request.data.get("note_ids")
+        if (
+            not isinstance(note_ids, list)
+            or not note_ids
+            or not all(isinstance(n, int) for n in note_ids)
+        ):
+            raise APIError(
+                "'note_ids' must be a non-empty list of note ids.",
+                code=ErrorCode.VALIDATION_ERROR,
+                status_code=400,
+            )
+        notes = list(Note.objects.filter(pk__in=note_ids, owner=request.user))
+        unknown = sorted(set(note_ids) - {n.pk for n in notes})
+        if unknown:
+            raise APIError(
+                "Some notes do not exist or are not yours.",
+                code=ErrorCode.VALIDATION_ERROR,
+                status_code=400,
+                details={"unknown_note_ids": unknown},
+            )
+
+        course = None
+        course_id = request.data.get("course_id")
+        if course_id:
+            try:
+                course = StudentCourse.objects.filter(pk=course_id).first()
+            except (ValueError, ValidationError):
+                course = None
+            if course is None:
+                raise APIError(
+                    "Unknown course_id.",
+                    code=ErrorCode.VALIDATION_ERROR,
+                    status_code=400,
+                    details={"course_id": str(course_id)},
+                )
+
+        plan = StudyPlan.objects.create(owner=request.user, course=course)
+        plan.notes.set(notes)
+        job = _dispatch_plan_job(request, plan)
+        return Response(
+            {"job_id": job.pk, "study_plan_id": plan.pk}, status=status.HTTP_202_ACCEPTED
+        )
+
+
+class StudyPlanDetailView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def get(self, request, pk):
+        plan = get_owned_plan(request, pk)
+        return Response(StudyPlanSerializer(plan).data)
+
+
+class StudyPlanRegenerateView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def post(self, request, pk):
+        plan = get_owned_plan(request, pk)
+        job = _dispatch_plan_job(request, plan)
+        return Response({"job_id": job.pk}, status=status.HTTP_202_ACCEPTED)
 
 
 class JobDetailView(NotesAPIView):

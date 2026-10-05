@@ -1,5 +1,5 @@
-Output key "podcast": a study-podcast script for two hosts reviewing this document, matching exactly:
-{"title": "episode title", "script": "Alex: ...\nJordan: ..."}
+Output key "podcast": a study-podcast script for two hosts reviewing this document. The response must contain:
+{"podcast": {"title": "episode title", "script": "Alex: ...\nJordan: ..."}}
 
 Script rules:
 - Exactly two speakers named Alex and Jordan; every line starts with "Alex: " or "Jordan: ".

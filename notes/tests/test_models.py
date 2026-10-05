@@ -1,6 +1,13 @@
 import pytest
 
-from notes.models import GenerationJob, Note, QuestionSet, Summary, note_upload_path
+from notes.models import (
+    GenerationJob,
+    Note,
+    QuestionSet,
+    StudyPlan,
+    Summary,
+    note_upload_path,
+)
 
 
 @pytest.fixture
@@ -40,6 +47,36 @@ def test_latest_summary_wins(note, user):
     Summary.objects.create(note=note, job=job, content={"title": "old"}, prompt_version="v1")
     newer = Summary.objects.create(note=note, job=job, content={"title": "new"}, prompt_version="v1")
     assert note.summaries.first() == newer
+
+
+def test_study_plan_links_owner_notes_and_jobs(note, user):
+    other_note = Note.objects.create(
+        owner=user, original_filename="b.pdf", size_bytes=1, file="notes/x/b.pdf"
+    )
+    plan = StudyPlan.objects.create(owner=user)
+    plan.notes.set([note, other_note])
+    assert plan.course is None
+    assert plan.topics == []
+    assert plan.status == GenerationJob.PENDING
+    assert set(plan.notes.all()) == {note, other_note}
+    assert plan in note.study_plans.all()
+
+    job = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
+    assert job.note is None
+    job.mark_done(input_tokens=1, output_tokens=1)
+    assert plan.status == GenerationJob.DONE
+
+
+def test_study_plan_status_follows_latest_job(note, user):
+    plan = StudyPlan.objects.create(owner=user)
+    first = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
+    first.mark_failed("llm_provider_error", "boom")
+    GenerationJob.objects.create(owner=user, study_plan=plan, requested_outputs=["study_plan"])
+    assert plan.status == GenerationJob.PENDING
 
 
 def test_question_set_belongs_to_note_with_format(note, user):

@@ -109,6 +109,80 @@ def test_validate_podcast_script_flags_problems():
     assert validate_podcast_script({"title": "t", "script": "Alex: all alone here"}) != []
 
 
+def test_build_prompt_includes_study_plan_block():
+    prompt = build_prompt([OutputType.STUDY_PLAN], GenerationContext())
+    assert '"study_plan"' in prompt
+    assert "priority" in prompt
+    assert "suggested_minutes" in prompt
+
+
+def test_build_prompt_mentions_term_end_only_when_known():
+    with_term = build_prompt(
+        [OutputType.STUDY_PLAN], GenerationContext(term_end="2026-12-15")
+    )
+    without_term = build_prompt([OutputType.STUDY_PLAN], GenerationContext())
+    assert "2026-12-15" in with_term
+    assert "term ends" not in without_term.lower()
+
+
+def test_validate_study_plan_accepts_topic_list():
+    from notes.llm.base import validate_study_plan
+
+    plan = {
+        "topics": [
+            {"name": "Fourier series", "priority": 1, "suggested_minutes": 90, "source_note_ids": [41]},
+            {"name": "Laplace transforms", "priority": 2, "suggested_minutes": 60, "source_note_ids": [41, 45]},
+        ]
+    }
+    assert validate_study_plan(plan, valid_note_ids={41, 45}) == []
+
+
+def test_validate_study_plan_flags_problems():
+    from notes.llm.base import validate_study_plan
+
+    assert validate_study_plan(None) != []
+    assert validate_study_plan({"topics": []}) != []
+    assert any(
+        "name" in p
+        for p in validate_study_plan(
+            {"topics": [{"priority": 1, "suggested_minutes": 5, "source_note_ids": [1]}]}
+        )
+    )
+    assert any(
+        "priority" in p
+        for p in validate_study_plan(
+            {"topics": [{"name": "x", "priority": 0, "suggested_minutes": 5, "source_note_ids": [1]}]}
+        )
+    )
+    assert any(
+        "suggested_minutes" in p
+        for p in validate_study_plan(
+            {"topics": [{"name": "x", "priority": 1, "suggested_minutes": "long", "source_note_ids": [1]}]}
+        )
+    )
+
+
+def test_validate_study_plan_checks_source_note_ids():
+    from notes.llm.base import validate_study_plan
+
+    topic = {"name": "x", "priority": 1, "suggested_minutes": 30}
+    # missing or empty sources
+    assert any("source_note_ids" in p for p in validate_study_plan({"topics": [topic]}))
+    assert any(
+        "source_note_ids" in p
+        for p in validate_study_plan({"topics": [{**topic, "source_note_ids": []}]})
+    )
+    # a cited id that is not one of the plan's notes is a hallucination
+    assert any(
+        "source_note_ids" in p
+        for p in validate_study_plan(
+            {"topics": [{**topic, "source_note_ids": [999]}]}, valid_note_ids={41}
+        )
+    )
+    # without a valid set (shape-only check), well-formed ids pass
+    assert validate_study_plan({"topics": [{**topic, "source_note_ids": [41]}]}) == []
+
+
 def test_validate_questions_flags_problems():
     from notes.llm.base import validate_questions
 

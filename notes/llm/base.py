@@ -19,6 +19,7 @@ class GenerationContext:
     course_name: str = ""
     course_code: str = ""
     question_format: str = ""
+    term_end: str = ""
     corrective_note: str = ""
 
 
@@ -81,6 +82,19 @@ def build_prompt(output_types, context):
         )
     if OutputType.PODCAST in output_types:
         parts.append(_template("podcast.txt"))
+    if OutputType.STUDY_PLAN in output_types:
+        term_note = (
+            f"- The term ends on {context.term_end}; schedule so everything fits before then."
+            if context.term_end
+            else ""
+        )
+        plan_shape = (
+            '{"study_plan": {"topics": [{"name": "topic", "priority": 1,'
+            ' "suggested_minutes": 90, "source_note_ids": [41]}]}}'
+        )
+        parts.append(
+            _template("study_plan.txt").format(plan_shape=plan_shape, term_note=term_note)
+        )
     if context.corrective_note:
         parts.append(f"IMPORTANT — your previous response was rejected: {context.corrective_note}")
     return "\n\n".join(parts)
@@ -113,6 +127,38 @@ def validate_questions(data, question_format):
                 or not 0 <= answer_index < len(choices)
             ):
                 problems.append(f"question {i}: 'answer_index' out of range")
+    return problems
+
+
+def validate_study_plan(data, valid_note_ids=None):
+    if not isinstance(data, dict):
+        return ["study plan is not an object"]
+    topics = data.get("topics")
+    if not isinstance(topics, list) or not topics:
+        return ["missing/empty 'topics'"]
+    problems = []
+    for i, topic in enumerate(topics):
+        if not isinstance(topic, dict):
+            problems.append(f"topic {i}: not an object")
+            continue
+        if not isinstance(topic.get("name"), str) or not topic["name"].strip():
+            problems.append(f"topic {i}: missing/invalid 'name'")
+        priority = topic.get("priority")
+        if not isinstance(priority, int) or isinstance(priority, bool) or priority < 1:
+            problems.append(f"topic {i}: missing/invalid 'priority'")
+        minutes = topic.get("suggested_minutes")
+        if not isinstance(minutes, int) or isinstance(minutes, bool) or minutes <= 0:
+            problems.append(f"topic {i}: missing/invalid 'suggested_minutes'")
+        sources = topic.get("source_note_ids")
+        if (
+            not isinstance(sources, list)
+            or not sources
+            or not all(isinstance(s, int) and not isinstance(s, bool) for s in sources)
+        ):
+            problems.append(f"topic {i}: missing/invalid 'source_note_ids'")
+        elif valid_note_ids is not None and not set(sources) <= set(valid_note_ids):
+            unknown = sorted(set(sources) - set(valid_note_ids))
+            problems.append(f"topic {i}: 'source_note_ids' cites unknown notes {unknown}")
     return problems
 
 

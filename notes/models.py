@@ -49,6 +49,9 @@ class GenerationJob(models.Model):
     note = models.ForeignKey(
         Note, on_delete=models.CASCADE, null=True, blank=True, related_name="jobs"
     )
+    study_plan = models.ForeignKey(
+        "StudyPlan", on_delete=models.CASCADE, null=True, blank=True, related_name="jobs"
+    )
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="generation_jobs")
     requested_outputs = models.JSONField(default=list)
     question_format = models.CharField(max_length=16, blank=True, default="")
@@ -110,6 +113,30 @@ class QuestionSet(models.Model):
 
     def __str__(self):
         return f"{self.format} set {self.pk} for note {self.note_id}"
+
+
+class StudyPlan(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="study_plans")
+    course = models.ForeignKey(
+        StudentCourse, on_delete=models.SET_NULL, null=True, blank=True, related_name="study_plans"
+    )
+    notes = models.ManyToManyField(Note, related_name="study_plans")
+    topics = models.JSONField(default=list, blank=True)
+    prompt_version = models.CharField(max_length=64, blank=True, default="")
+    generated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def status(self):
+        # The jobs are the state machine; the newest one speaks for the plan.
+        latest = self.jobs.first()
+        return latest.status if latest else GenerationJob.PENDING
+
+    def __str__(self):
+        return f"study plan {self.pk} for {self.owner_id}"
 
 
 def podcast_upload_path(instance, filename):

@@ -119,8 +119,10 @@ CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower(
 
 INGEST_API_KEY = _require_env("INGEST_API_KEY")
 
-# AI feature entitlements: "stub-allow" until the Verisafe contract is captured.
+# AI feature entitlements: "verisafe" checks GET {VERISAFE_URL}/subscriptions/me
+# with the caller's own JWT; "stub-allow" grants everyone (dev/test only).
 AI_ENTITLEMENT_MODE = os.getenv("AI_ENTITLEMENT_MODE", "stub-allow")
+VERISAFE_URL = os.getenv("VERISAFE_URL", "").rstrip("/")
 
 # LLM backend: "gemini" in real deployments, "fake" in tests (set by conftest).
 # Key is worker-only, so absence must not block web boot — checked at use time.
@@ -272,13 +274,25 @@ STORAGES = {
     },
 }
 
+# Local development without S3: files land under media/ and are served by
+# runserver (DEBUG only). Never enable in a deployed environment.
+MEDIA_ROOT = BASE_DIR / "media"
+if os.getenv("LOCAL_MEDIA", "false").lower() == "true":
+    STORAGES["default"] = {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": str(MEDIA_ROOT), "base_url": MEDIA_URL},
+    }
+
 
 # File upload settings for large images
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 
 NOTES_MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB cap for note PDFs
-NOTES_MAX_MARKDOWN_CHARS = 250_000  # avoids unbounded LLM input from an accepted upload
+# Caps LLM input (single note, or all notes combined in a study plan).
+# 1M chars ≈ 250k tokens ≈ $0.075 per call at Flash-Lite rates; three ordinary
+# project documents measured ~272k chars together, so 250k was too tight.
+NOTES_MAX_MARKDOWN_CHARS = 1_000_000
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
 
 # HTTPS Configuration
