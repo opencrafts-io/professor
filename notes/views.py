@@ -294,6 +294,22 @@ class StudyPlanRegenerateView(NotesAPIView):
         return Response({"job_id": job.pk}, status=status.HTTP_202_ACCEPTED)
 
 
+class StudyPlanSuggestedSessionsView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def get(self, request, pk):
+        plan = get_owned_plan(request, pk)
+        if not plan.topics:
+            raise APIError(
+                "This study plan has no topics yet — generate it first.",
+                code=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
+        from .services.sessions import suggested_sessions
+
+        return Response({"study_plan_id": plan.pk, "sessions": suggested_sessions(plan)})
+
+
 class JobDetailView(NotesAPIView):
     permission_classes = [HasAIEntitlement]
 
