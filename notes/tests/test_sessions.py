@@ -102,6 +102,64 @@ def test_past_term_end_is_ignored(plan, user):
     assert sessions[0]["start_time"] == "2026-10-14T17:00:00Z"  # normal schedule
 
 
+def test_deadline_starts_today_and_compresses(plan):
+    # 3 topics, deadline tomorrow -> 2-day window, 2 per day, cram hours
+    sessions = suggested_sessions(plan, now=NOW, deadline=date(2026, 10, 14))
+    assert len(sessions) == 3
+    # first session today, next full hour after 12:00, not the 09:00 cram slot already past
+    assert sessions[0]["start_time"] == "2026-10-13T13:00:00Z"
+    assert sessions[1]["start_time"] == "2026-10-13T14:45:00Z"  # 90min + 15min break
+    assert sessions[2]["start_time"] == "2026-10-14T09:00:00Z"  # fresh cram day
+    assert all(s["start_time"][:10] <= "2026-10-14" for s in sessions)
+
+
+def test_deadline_overrides_term_end(plan, user):
+    from courses.models import StudentCourse
+    from institutions.models import Institution
+    from users.models import StudentProfile
+
+    institution = Institution.objects.create(
+        name="U3", web_pages=["https://u3.example"], domains=["u3.example"], country="Kenya"
+    )
+    student = StudentProfile.objects.create(user=user, student_id="s-3")
+    plan.course = StudentCourse.objects.create(
+        student=student, institution=institution, title="Maths",
+        term_end_date=date(2026, 12, 15),
+    )
+    plan.save()
+    sessions = suggested_sessions(plan, now=NOW, deadline=date(2026, 10, 14))
+    assert all(s["start_time"][:10] <= "2026-10-14" for s in sessions)
+
+
+def test_generous_deadline_still_starts_today_relaxed_hours(plan):
+    sessions = suggested_sessions(plan, now=NOW, deadline=date(2026, 10, 30))
+    # uncompressed (1/day) keeps the 17:00 evening slot, but begins today
+    assert sessions[0]["start_time"] == "2026-10-13T17:00:00Z"
+    assert sessions[1]["start_time"] == "2026-10-14T17:00:00Z"
+
+
+def test_endpoint_accepts_deadline_param(auth_client, plan):
+    response = auth_client.get(
+        f"/api/notes/study-plans/{plan.pk}/suggested-sessions/?deadline=2100-01-02"
+    )
+    assert response.status_code == 200
+    assert len(response.data["sessions"]) == 3
+
+
+def test_endpoint_rejects_bad_deadlines(auth_client, plan):
+    response = auth_client.get(
+        f"/api/notes/study-plans/{plan.pk}/suggested-sessions/?deadline=not-a-date"
+    )
+    assert response.status_code == 400
+    assert response.data["error"]["code"] == "validation_error"
+
+    response = auth_client.get(
+        f"/api/notes/study-plans/{plan.pk}/suggested-sessions/?deadline=2020-01-01"
+    )
+    assert response.status_code == 400
+    assert response.data["error"]["code"] == "validation_error"
+
+
 def test_endpoint_returns_sessions_per_contract(auth_client, plan):
     response = auth_client.get(f"/api/notes/study-plans/{plan.pk}/suggested-sessions/")
     assert response.status_code == 200

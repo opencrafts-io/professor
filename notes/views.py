@@ -1,7 +1,9 @@
+from datetime import date
 from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -305,9 +307,32 @@ class StudyPlanSuggestedSessionsView(NotesAPIView):
                 code=ErrorCode.NOT_FOUND,
                 status_code=404,
             )
+        deadline = None
+        deadline_raw = request.query_params.get("deadline")
+        if deadline_raw:
+            try:
+                deadline = date.fromisoformat(deadline_raw)
+            except ValueError:
+                raise APIError(
+                    "'deadline' must be a YYYY-MM-DD date.",
+                    code=ErrorCode.VALIDATION_ERROR,
+                    status_code=400,
+                )
+            if deadline < timezone.now().date():
+                raise APIError(
+                    "'deadline' is in the past.",
+                    code=ErrorCode.VALIDATION_ERROR,
+                    status_code=400,
+                    details={"deadline": deadline_raw},
+                )
         from .services.sessions import suggested_sessions
 
-        return Response({"study_plan_id": plan.pk, "sessions": suggested_sessions(plan)})
+        return Response(
+            {
+                "study_plan_id": plan.pk,
+                "sessions": suggested_sessions(plan, deadline=deadline),
+            }
+        )
 
 
 class JobDetailView(NotesAPIView):
