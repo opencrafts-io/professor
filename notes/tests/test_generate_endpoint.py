@@ -94,6 +94,20 @@ def test_generate_conflicts_while_job_in_flight(auth_client, note, user):
     assert response.data["error"]["details"] == {"job_id": in_flight.pk}
 
 
+def test_generate_marks_job_failed_when_queueing_raises(auth_client, note, monkeypatch):
+    def boom(job_id):
+        raise OSError("broker unreachable")
+
+    monkeypatch.setattr("notes.tasks.run_generation.delay", boom)
+    response = auth_client.post(generate_url(note), {"outputs": ["summary"]}, format="json")
+    assert response.status_code == 500
+    assert response.data["error"]["code"] == "internal_error"
+    # the job must not linger as pending, blocking every retry with a 409
+    job = GenerationJob.objects.get(note=note)
+    assert job.status == GenerationJob.FAILED
+    assert job.failure_code == GenerationJob.FAILURE_INTERNAL
+
+
 def test_generate_404_for_other_users_note(api_client, note):
     import uuid
 

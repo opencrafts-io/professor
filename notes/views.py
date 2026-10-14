@@ -39,6 +39,20 @@ def get_owned_note(request, pk):
     return note
 
 
+def dispatch_job(job):
+    # A job that never reaches the broker must not survive as pending: it
+    # would 409-block every retry until someone deletes it by hand.
+    try:
+        run_generation.delay(job.pk)
+    except Exception as exc:
+        job.mark_failed(GenerationJob.FAILURE_INTERNAL, f"queueing failed: {exc}")
+        raise APIError(
+            "The generation job could not be queued. Please try again shortly.",
+            code=ErrorCode.INTERNAL_ERROR,
+            status_code=500,
+        )
+
+
 class NoteListCreateView(NotesAPIView):
     permission_classes = [HasAIEntitlement]
 
@@ -180,7 +194,7 @@ class NoteGenerateView(NotesAPIView):
             requested_outputs=outputs,
             question_format=question_format,
         )
-        run_generation.delay(job.pk)
+        dispatch_job(job)
         return Response({"job_id": job.pk}, status=status.HTTP_202_ACCEPTED)
 
 
@@ -232,7 +246,7 @@ def _dispatch_plan_job(request, plan):
     job = GenerationJob.objects.create(
         owner=request.user, study_plan=plan, requested_outputs=[OutputType.STUDY_PLAN.value]
     )
-    run_generation.delay(job.pk)
+    dispatch_job(job)
     return job
 
 
