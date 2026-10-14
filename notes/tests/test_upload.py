@@ -101,6 +101,14 @@ def test_upload_rejects_unknown_course(auth_client):
     assert response.json()["error"]["code"] == "validation_error"
 
 
+def test_upload_rejects_malformed_course_id(auth_client):
+    response = auth_client.post(
+        "/api/notes/", {"file": _pdf(), "course_id": "not-a-uuid"}, format="multipart"
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "validation_error"
+
+
 def test_list_returns_only_own_notes(auth_client, user, db):
     other = User.objects.create(user_id=uuid.uuid4(), name="Other")
     Note.objects.create(owner=user, original_filename="mine.pdf", size_bytes=1, file="n/a.pdf")

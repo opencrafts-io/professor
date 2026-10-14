@@ -86,13 +86,16 @@ class NoteListCreateView(NotesAPIView):
         course = None
         course_id = request.data.get("course_id")
         if course_id:
-            course = StudentCourse.objects.filter(pk=course_id).first()
+            try:
+                course = StudentCourse.objects.filter(pk=course_id).first()
+            except (ValueError, ValidationError):
+                course = None
             if course is None:
                 raise APIError(
                     "Unknown course_id.",
                     code=ErrorCode.VALIDATION_ERROR,
                     status_code=400,
-                    details={"course_id": course_id},
+                    details={"course_id": str(course_id)},
                 )
 
         note = Note.objects.create(
