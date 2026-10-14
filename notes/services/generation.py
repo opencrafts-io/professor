@@ -10,6 +10,7 @@ from ..llm.base import (
     PROMPT_VERSION,
     DocumentSource,
     GenerationContext,
+    LLMProviderError,
     OutputType,
     validate_podcast_script,
     validate_questions,
@@ -181,6 +182,10 @@ def run_generation_job(job_id, client=None, markdown_converter=None, tts_client=
     for attempt in range(2):
         try:
             result = client.generate(document, output_types, context)
+        except LLMProviderError:
+            # The task layer retries these with backoff; the job stays
+            # processing so the in-flight guard keeps holding duplicates off.
+            raise
         except Exception as exc:
             _fail(job, GenerationJob.FAILURE_PROVIDER, str(exc))
             return

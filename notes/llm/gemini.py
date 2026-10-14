@@ -3,7 +3,7 @@ import json
 from google import genai
 from google.genai import types
 
-from .base import GenerationResult, build_prompt
+from .base import GenerationResult, LLMProviderError, build_prompt
 
 
 class GeminiClient:
@@ -18,14 +18,18 @@ class GeminiClient:
 </source_document>""" % document.markdown
         else:
             source = types.Part.from_bytes(data=document.pdf_bytes, mime_type="application/pdf")
-        response = self._client.models.generate_content(
-            model=self._model,
-            contents=[source],
-            config=types.GenerateContentConfig(
-                system_instruction=build_prompt(output_types, context),
-                response_mime_type="application/json",
-            ),
-        )
+        try:
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=[source],
+                config=types.GenerateContentConfig(
+                    system_instruction=build_prompt(output_types, context),
+                    response_mime_type="application/json",
+                ),
+            )
+        except Exception as exc:
+            # Normalize SDK/network failures so the task layer can retry them.
+            raise LLMProviderError(str(exc)) from exc
         payload = json.loads(response.text or "{}")
         usage = response.usage_metadata
         return GenerationResult(
