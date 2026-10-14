@@ -166,12 +166,13 @@ class NoteGenerateView(NotesAPIView):
             question_format = ""
         in_flight = note.jobs.filter(
             status__in=[GenerationJob.PENDING, GenerationJob.PROCESSING]
-        ).exists()
-        if in_flight:
+        ).first()
+        if in_flight is not None:
             raise APIError(
                 "A generation job for this note is already running.",
                 code=ErrorCode.JOB_ALREADY_RUNNING,
                 status_code=409,
+                details={"job_id": in_flight.pk},
             )
         job = GenerationJob.objects.create(
             note=note,
@@ -220,12 +221,13 @@ def get_owned_plan(request, pk):
 def _dispatch_plan_job(request, plan):
     in_flight = plan.jobs.filter(
         status__in=[GenerationJob.PENDING, GenerationJob.PROCESSING]
-    ).exists()
-    if in_flight:
+    ).first()
+    if in_flight is not None:
         raise APIError(
             "A generation job for this study plan is already running.",
             code=ErrorCode.JOB_ALREADY_RUNNING,
             status_code=409,
+            details={"job_id": in_flight.pk},
         )
     job = GenerationJob.objects.create(
         owner=request.user, study_plan=plan, requested_outputs=[OutputType.STUDY_PLAN.value]

@@ -84,10 +84,14 @@ def test_generate_ignores_question_format_without_questions(auth_client, note):
 
 
 def test_generate_conflicts_while_job_in_flight(auth_client, note, user):
-    GenerationJob.objects.create(note=note, owner=user, requested_outputs=["summary"])
+    in_flight = GenerationJob.objects.create(
+        note=note, owner=user, requested_outputs=["summary"]
+    )
     response = auth_client.post(generate_url(note), {"outputs": ["summary"]}, format="json")
     assert response.status_code == 409
     assert response.data["error"]["code"] == "job_already_running"
+    # a reconnecting client can resume polling the job it already has
+    assert response.data["error"]["details"] == {"job_id": in_flight.pk}
 
 
 def test_generate_404_for_other_users_note(api_client, note):
