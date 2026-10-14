@@ -225,3 +225,6 @@ uploads/
 *.json
 
 evaluate*.py
+
+# Local media root when LOCAL_MEDIA=true (dev uploads, never committed)
+media/
