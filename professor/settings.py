@@ -129,6 +129,14 @@ VERISAFE_URL = os.getenv("VERISAFE_URL", "").rstrip("/")
 # Key is worker-only, so absence must not block web boot — checked at use time.
 AI_LLM_BACKEND = os.getenv("AI_LLM_BACKEND", "gemini")
 AI_TTS_BACKEND = os.getenv("AI_TTS_BACKEND", "gemini")
+# Per-user daily quotas (UTC calendar day), enforced by counting the day's
+# rows. A missing key means unlimited. Podcasts get a tighter limit because
+# TTS costs roughly ten times a text generation.
+AI_QUOTAS = {
+    "uploads_per_day": int(os.getenv("AI_QUOTA_UPLOADS_PER_DAY", "20")),
+    "generations_per_day": int(os.getenv("AI_QUOTA_GENERATIONS_PER_DAY", "10")),
+    "podcasts_per_day": int(os.getenv("AI_QUOTA_PODCASTS_PER_DAY", "3")),
+}
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 REST_FRAMEWORK = {

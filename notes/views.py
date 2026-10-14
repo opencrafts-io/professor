@@ -22,6 +22,7 @@ from .serializers import (
     SummarySerializer,
 )
 from .services.entitlements import HasAIEntitlement
+from .services.quotas import enforce_quota
 from .tasks import run_generation
 
 # generation grows to study plans (wk6)
@@ -72,6 +73,7 @@ class NoteListCreateView(NotesAPIView):
     }
 
     def post(self, request):
+        enforce_quota(request.user, "uploads_per_day")
         upload = request.FILES.get("file")
         if upload is None:
             raise APIError(
@@ -188,6 +190,9 @@ class NoteGenerateView(NotesAPIView):
                 status_code=409,
                 details={"job_id": in_flight.pk},
             )
+        enforce_quota(request.user, "generations_per_day")
+        if OutputType.PODCAST.value in outputs:
+            enforce_quota(request.user, "podcasts_per_day")
         job = GenerationJob.objects.create(
             note=note,
             owner=request.user,
@@ -243,6 +248,7 @@ def _dispatch_plan_job(request, plan):
             status_code=409,
             details={"job_id": in_flight.pk},
         )
+    enforce_quota(request.user, "generations_per_day")
     job = GenerationJob.objects.create(
         owner=request.user, study_plan=plan, requested_outputs=[OutputType.STUDY_PLAN.value]
     )
@@ -290,6 +296,9 @@ class StudyPlanCreateView(NotesAPIView):
                     details={"course_id": str(course_id)},
                 )
 
+        # checked again in _dispatch_plan_job; here it keeps a rejected
+        # request from leaving an empty plan row behind
+        enforce_quota(request.user, "generations_per_day")
         plan = StudyPlan.objects.create(owner=request.user, course=course)
         plan.notes.set(notes)
         job = _dispatch_plan_job(request, plan)
