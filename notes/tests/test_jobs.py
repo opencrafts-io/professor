@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 
 from notes.models import GenerationJob, Note
 
@@ -32,3 +35,24 @@ def test_mark_failed_records_code(job):
     assert job.status == GenerationJob.FAILED
     assert job.failure_code == "llm_invalid_output"
     assert job.finished_at is not None
+
+
+def test_poll_reaps_job_stuck_in_processing(auth_client, job):
+    # a killed worker leaves processing rows behind; the poll is the reaper
+    job.mark_processing()
+    GenerationJob.objects.filter(pk=job.pk).update(
+        started_at=timezone.now() - timedelta(minutes=16)
+    )
+    response = auth_client.get(f"/api/notes/jobs/{job.pk}/")
+    assert response.status_code == 200
+    assert response.data["status"] == "failed"
+    assert response.data["failure_code"] == "internal_error"
+    job.refresh_from_db()
+    assert job.status == GenerationJob.FAILED
+
+
+def test_poll_leaves_fresh_processing_job_alone(auth_client, job):
+    job.mark_processing()
+    response = auth_client.get(f"/api/notes/jobs/{job.pk}/")
+    assert response.status_code == 200
+    assert response.data["status"] == "processing"

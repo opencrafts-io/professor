@@ -361,6 +361,7 @@ class JobDetailView(NotesAPIView):
         job = GenerationJob.objects.filter(pk=job_id, owner=request.user).first()
         if job is None:
             raise APIError("Job not found.", code=ErrorCode.NOT_FOUND, status_code=404)
+        job.reap_if_stuck()
         return Response(GenerationJobSerializer(job).data)
 
 

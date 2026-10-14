@@ -294,6 +294,9 @@ NOTES_MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB cap for note PDFs
 # 1M chars ≈ 250k tokens ≈ $0.075 per call at Flash-Lite rates; three ordinary
 # project documents measured ~272k chars together, so 250k was too tight.
 NOTES_MAX_MARKDOWN_CHARS = 1_000_000
+# A processing job older than this was orphaned by a dead worker (the celery
+# hard time limit is 300s); job polls fail it lazily instead of a beat process.
+NOTES_JOB_STUCK_SECONDS = 15 * 60
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
 
 # HTTPS Configuration
