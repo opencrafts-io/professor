@@ -1,0 +1,16 @@
+Output key "study_plan": a revision plan built from ALL the source material. The response must contain:
+{plan_shape}
+
+Rules:
+- One topic per distinct subject area found across the documents; 5-12 topics.
+- Topics are subject matter to learn, never document structure: chapter labels
+  like "Introduction", "Literature Review", "Methodology" or "Conclusion" are
+  not topics. Name the actual concepts, systems, and techniques.
+- priority is 1 for the most urgent topic, counting up; weight topics that are
+  foundational, heavily covered, or explicitly flagged as examinable.
+- suggested_minutes is a realistic focused-study estimate (15-180 per topic).
+- Draw topics from every source document — no document may be left unrepresented.
+- source_note_ids lists which documents a topic draws from, using the numeric ids
+  from the "# Note <id>:" headings; every topic cites at least one. Cite only the
+  documents a topic substantially draws from — never blanket-cite every document.
+{term_note}

@@ -96,33 +96,30 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
           yq --version
 
-      - name: Compute deployment file path
+      - name: Compute deployment directory
         id: target
         run: |
           BRANCH="${GITHUB_REF_NAME#refs/heads/}"
           if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
-            FILE="infraops/services/professor/deployment.yaml"
+            DIRECTORY="services/professor"
           else
-            FILE="infraops/qaservices/professor/deployment.yaml"
+            DIRECTORY="qaservices/professor"
           fi
-          echo "file=$FILE" >> "$GITHUB_OUTPUT"
-          echo "Deployment file: $FILE"
+          echo "directory=$DIRECTORY" >> "$GITHUB_OUTPUT"
+          echo "Deployment directory: $DIRECTORY"
 
-      - name: Update deployment.yaml
+      - name: Update web and worker deployments
         run: |
-          FILE="${{ steps.target.outputs.file }}"
+          DIRECTORY="infraops/${{ steps.target.outputs.directory }}"
           IMAGE="${{ steps.tags.outputs.image_base }}:${{ steps.tags.outputs.sha_tag }}"
-          echo "Updating $FILE with image: $IMAGE"
-          if [ ! -f "$FILE" ]; then
-            echo "ERROR: $FILE does not exist!"
-            ls -la "$(dirname $FILE)"
-            exit 1
-          fi
-          echo "Old image:"
-          yq eval '.spec.template.spec.containers[0].image' "$FILE"
-          yq eval ".spec.template.spec.containers[0].image = \"$IMAGE\"" -i "$FILE"
-          echo "New image:"
-          yq eval '.spec.template.spec.containers[0].image' "$FILE"
+          for FILE in "$DIRECTORY/deployment.yaml" "$DIRECTORY/worker-deployment.yaml"; do
+            if [ ! -f "$FILE" ]; then
+              echo "ERROR: $FILE does not exist!"
+              exit 1
+            fi
+            echo "Updating $FILE with image: $IMAGE"
+            yq eval ".spec.template.spec.containers[0].image = \"$IMAGE\"" -i "$FILE"
+          done
 
       - name: Commit and push changes
         run: |
@@ -131,12 +128,7 @@ jobs:
           git config user.name "CI Bot from Github Actions"
           git config user.email "actions@github.com"
           
-          if [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.ref_name }}" = "master" ]; then
-            FILE="services/professor/deployment.yaml"
-          else
-            FILE="qaservices/professor/deployment.yaml"
-          fi
-          
-          git add "$FILE"
+          DIRECTORY="${{ steps.target.outputs.directory }}"
+          git add "$DIRECTORY/deployment.yaml" "$DIRECTORY/worker-deployment.yaml"
           git commit -m "chore: update professor image to $IMAGE (${{ github.ref_name }})"
           git push origin main

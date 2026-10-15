@@ -10,11 +10,10 @@ from rest_framework.generics import (
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import NotFound
 from rest_framework.views import APIView, PermissionDenied, Response
-from users.models import StudentProfile, User, Administrator
+from users.models import StudentProfile, User
 from users.serializers import (
     StudentProfileSerializer,
     UserSerializer,
-    AdministratorSerializer,
 )
 
 
@@ -23,15 +22,6 @@ class UserManagementView(ListCreateAPIView):
 
     serializer_class = UserSerializer
     queryset = User.objects.all()
-
-
-class AdministratorManagementView(ListCreateAPIView):
-    """
-    Allows creating and listing administrators.
-    """
-
-    serializer_class = AdministratorSerializer
-    queryset = Administrator.objects.all()
 
 
 class StudentProfileCreateView(CreateAPIView):
