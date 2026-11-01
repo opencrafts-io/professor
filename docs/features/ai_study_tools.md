@@ -41,9 +41,14 @@ fall back to being read natively by the model.
 - Every endpoint requires the platform's standard bearer token.
 - Endpoints additionally require an active AI entitlement; requests without
   one receive `403 entitlement_required`.
-- Daily per-user quotas apply to uploads, generation jobs, and podcasts.
-  Exceeding one returns `429 quota_exceeded` with the quota name, the limit,
-  and today's usage in the error details. Quotas reset at midnight UTC.
+- Per-user quotas apply to uploads, generation jobs, and podcasts, counted
+  per UTC day and per UTC calendar month. Exceeding one returns
+  `429 quota_exceeded` with the quota name, the limit, and the usage so far
+  in the error details. Daily quotas reset at midnight UTC, monthly quotas
+  on the first of the month.
+- Extracted document text is capped at 300,000 characters per generation,
+  counted across a study plan's documents combined. A document over the cap
+  fails its job instead of being sent to the model.
 
 ## Reliability behavior worth knowing
 

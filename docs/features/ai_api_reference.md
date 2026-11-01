@@ -6,7 +6,6 @@ endpoints additionally require an active AI entitlement.
 
 ## Conventions
 
-- Trailing slashes and kebab-case paths.
 - Pagination is DRF page-number style: `?page=N`, 30 items per page.
 - All datetimes are ISO 8601 UTC.
 - Every error uses one envelope:
@@ -35,7 +34,7 @@ endpoints additionally require an active AI entitlement.
 | 403 | `entitlement_unavailable` | Entitlement could not be verified; retry later |
 | 404 | `not_found` | Resource does not exist or is not yours |
 | 409 | `job_already_running` | A job for this note or plan is already in flight; `details.job_id` is the running job, resume polling it |
-| 429 | `quota_exceeded` | Daily quota hit; `details` carries `quota`, `limit`, and `used` |
+| 429 | `quota_exceeded` | A daily or monthly quota was hit; `details` carries `quota`, `limit`, and `used` |
 | 500 | `internal_error` | Unexpected server error |
 
 **Job failure codes**, returned inside the job status rather than as HTTP
@@ -44,10 +43,14 @@ errors: `file_unreadable`, `conversion_failed`, `llm_provider_error`,
 
 ## Quotas
 
-Each user has daily limits, counted per UTC calendar day and reset at
-midnight UTC. The defaults are 20 uploads, 10 generation jobs, and 3
-podcasts per day; deployments can tune them. Every accepted generation
-request counts toward the quota, including requests whose job later fails.
+Each user has daily and monthly limits. Both are UTC calendar windows:
+daily limits reset at midnight UTC, monthly limits on the first of the
+month. The defaults are 20 uploads, 10 generation jobs, and 3 podcasts
+per day, plus 40 generation jobs and 8 podcasts per month; deployments
+can tune them. The `quota` field in the error details names the limit
+that was hit, for example `generations_per_day` or `podcasts_per_month`.
+Every accepted generation request counts toward the quota, including
+requests whose job later fails.
 
 ## Notes
 
@@ -105,6 +108,10 @@ Returns `201`:
   separate requests.
 - `question_format` is required when `questions` is requested:
   `flashcard`, `mcq`, or `open_ended`.
+
+Extracted document text sent to the model is capped at 300,000
+characters, counted across all of a study plan's documents combined. A
+document over the cap fails its job with the `conversion_failed` code.
 
 Returns `202` with `{ "job_id": 90 }`, or `409 job_already_running` with
 the running job's id in `details.job_id`.
