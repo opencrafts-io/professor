@@ -490,6 +490,14 @@ def test_study_plan_combined_markdown_cap_applies(user, settings):
     assert job.failure_code == GenerationJob.FAILURE_CONVERSION
 
 
+def test_default_markdown_cap_bounds_worst_case_cost():
+    # The premium pricing guarantee assumes at most ~75k input tokens per call;
+    # 300k characters keeps a three-document study plan within the cap.
+    from django.conf import settings as live_settings
+
+    assert live_settings.NOTES_MAX_MARKDOWN_CHARS == 300_000
+
+
 def test_regenerating_replaces_topics_in_place(user):
     plan, notes = _plan_with_notes(user, [b"PK\x03\x04 a"])
     job1 = GenerationJob.objects.create(

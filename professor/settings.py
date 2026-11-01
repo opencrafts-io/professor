@@ -303,9 +303,10 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
 
 NOTES_MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20MB cap for note PDFs
 # Caps LLM input (single note, or all notes combined in a study plan).
-# 1M chars ≈ 250k tokens ≈ $0.075 per call at Flash-Lite rates; three ordinary
-# project documents measured ~272k chars together, so 250k was too tight.
-NOTES_MAX_MARKDOWN_CHARS = 1_000_000
+# 300k chars ≈ 75k tokens bounds the worst-case cost per call, which the
+# premium pricing guarantee assumes; three ordinary project documents
+# measured ~272k chars together, so a multi-document plan still fits.
+NOTES_MAX_MARKDOWN_CHARS = 300_000
 # A processing job older than this was orphaned by a dead worker (the celery
 # hard time limit is 300s); job polls fail it lazily instead of a beat process.
 NOTES_JOB_STUCK_SECONDS = 15 * 60
