@@ -108,10 +108,31 @@ def test_regenerate_dispatches_new_job(auth_client, notes, user):
 def test_regenerate_conflicts_while_job_in_flight(auth_client, notes, user):
     plan = StudyPlan.objects.create(owner=user)
     plan.notes.set(notes)
-    GenerationJob.objects.create(owner=user, study_plan=plan, requested_outputs=["study_plan"])
+    in_flight = GenerationJob.objects.create(
+        owner=user, study_plan=plan, requested_outputs=["study_plan"]
+    )
     response = auth_client.post(f"/api/notes/study-plans/{plan.pk}/regenerate/")
     assert response.status_code == 409
     assert response.data["error"]["code"] == "job_already_running"
+    assert response.data["error"]["details"] == {"job_id": in_flight.pk}
+
+
+def test_regenerate_marks_job_failed_when_queueing_raises(
+    auth_client, notes, user, monkeypatch
+):
+    plan = StudyPlan.objects.create(owner=user)
+    plan.notes.set(notes)
+
+    def boom(job_id):
+        raise OSError("broker unreachable")
+
+    monkeypatch.setattr("notes.tasks.run_generation.delay", boom)
+    response = auth_client.post(f"/api/notes/study-plans/{plan.pk}/regenerate/")
+    assert response.status_code == 500
+    assert response.data["error"]["code"] == "internal_error"
+    job = GenerationJob.objects.get(study_plan=plan)
+    assert job.status == GenerationJob.FAILED
+    assert job.failure_code == GenerationJob.FAILURE_INTERNAL
 
 
 def test_note_detail_lists_study_plans(auth_client, notes, user):

@@ -101,6 +101,27 @@ def test_upload_rejects_unknown_course(auth_client):
     assert response.json()["error"]["code"] == "validation_error"
 
 
+def test_upload_truncates_very_long_filename_keeping_extension(auth_client, user):
+    # Django's upload handler caps incoming names at 255 chars (the column's
+    # size) and keeps the extension the converter needs for type detection.
+    long_name = "x" * 300 + ".pdf"
+    response = auth_client.post(
+        "/api/notes/", {"file": _pdf(name=long_name)}, format="multipart"
+    )
+    assert response.status_code == 201, response.content
+    note = Note.objects.get(owner=user)
+    assert len(note.original_filename) <= 255
+    assert note.original_filename.endswith(".pdf")
+
+
+def test_upload_rejects_malformed_course_id(auth_client):
+    response = auth_client.post(
+        "/api/notes/", {"file": _pdf(), "course_id": "not-a-uuid"}, format="multipart"
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "validation_error"
+
+
 def test_list_returns_only_own_notes(auth_client, user, db):
     other = User.objects.create(user_id=uuid.uuid4(), name="Other")
     Note.objects.create(owner=user, original_filename="mine.pdf", size_bytes=1, file="n/a.pdf")

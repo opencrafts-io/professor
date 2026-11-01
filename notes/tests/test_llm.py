@@ -1,3 +1,4 @@
+import pytest
 from types import SimpleNamespace
 
 from notes.llm.base import (
@@ -284,3 +285,22 @@ def test_gemini_sends_native_pdf_when_document_has_no_markdown(monkeypatch):
 
     assert calls["contents"] == [("part", "application/pdf", b"%PDF-scanned")]
     assert calls["config"]["system_instruction"] == "Generate a summary."
+
+
+def test_gemini_wraps_provider_failures_for_retry(monkeypatch):
+    from notes.llm import gemini
+    from notes.llm.base import LLMProviderError
+
+    class StubModels:
+        def generate_content(self, **kwargs):
+            raise RuntimeError("503 UNAVAILABLE: model overloaded")
+
+    monkeypatch.setattr(
+        gemini.genai, "Client", lambda api_key: SimpleNamespace(models=StubModels())
+    )
+    monkeypatch.setattr(gemini, "build_prompt", lambda *_: "Generate a summary.")
+
+    with pytest.raises(LLMProviderError, match="503"):
+        gemini.GeminiClient("key").generate(
+            DocumentSource(markdown="# Lecture"), [OutputType.SUMMARY], GenerationContext()
+        )

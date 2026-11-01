@@ -5,11 +5,12 @@ import time
 from django.conf import settings
 from django.core.files.base import ContentFile
 
-from ..convert.base import ConversionError
+from ..convert.base import ConversionError, InputTooLargeError
 from ..llm.base import (
     PROMPT_VERSION,
     DocumentSource,
     GenerationContext,
+    LLMProviderError,
     OutputType,
     validate_podcast_script,
     validate_questions,
@@ -98,7 +99,7 @@ def _markdown_for(note, markdown_converter):
     markdown_converter = markdown_converter or get_markdown_converter()
     markdown = markdown_converter.to_markdown(source_bytes, note.original_filename)
     if len(markdown) > settings.NOTES_MAX_MARKDOWN_CHARS:
-        raise ConversionError("Converted document exceeds the Markdown input limit.")
+        raise InputTooLargeError("Converted document exceeds the Markdown input limit.")
     return markdown
 
 
@@ -119,7 +120,7 @@ def _document_for_plan(plan, markdown_converter):
         sections.append(f"# Note {note.pk}: {note.original_filename}\n\n{markdown}")
     combined = "\n\n---\n\n".join(sections)
     if len(combined) > settings.NOTES_MAX_MARKDOWN_CHARS:
-        raise ConversionError("Combined notes exceed the Markdown input limit.")
+        raise InputTooLargeError("Combined notes exceed the Markdown input limit.")
     return DocumentSource(markdown=combined)
 
 
@@ -128,6 +129,8 @@ def _document_for(note, markdown_converter):
         return DocumentSource(markdown=note.converted_markdown)
     try:
         markdown = _markdown_for(note, markdown_converter)
+    except InputTooLargeError:
+        raise
     except ConversionError as exc:
         # Scanned/image PDFs yield no usable text; Gemini reads them natively.
         if not note.file.name.lower().endswith(".pdf"):
@@ -181,6 +184,10 @@ def run_generation_job(job_id, client=None, markdown_converter=None, tts_client=
     for attempt in range(2):
         try:
             result = client.generate(document, output_types, context)
+        except LLMProviderError:
+            # The task layer retries these with backoff; the job stays
+            # processing so the in-flight guard keeps holding duplicates off.
+            raise
         except Exception as exc:
             _fail(job, GenerationJob.FAILURE_PROVIDER, str(exc))
             return
