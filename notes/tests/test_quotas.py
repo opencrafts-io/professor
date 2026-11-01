@@ -1,5 +1,5 @@
-"""Per-user daily quotas: counted from existing rows, limits from settings,
-429 quota_exceeded with details when a limit is hit."""
+"""Per-user daily and monthly quotas: counted from existing rows, limits from
+settings, 429 quota_exceeded with details when a limit is hit."""
 
 from datetime import timedelta
 
@@ -21,6 +21,10 @@ def _note(user, name="a.pdf"):
     note = Note(owner=user, original_filename=name, size_bytes=9)
     note.file.save(name, ContentFile(b"%PDF-fake"), save=True)
     return note
+
+
+def _month_start():
+    return timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
 def test_upload_blocked_at_daily_limit(auth_client, user, settings):
@@ -134,6 +138,88 @@ def test_missing_quota_key_means_unlimited(auth_client, settings):
         assert response.status_code == 201
 
 
+def test_generation_blocked_at_monthly_limit(auth_client, user, settings):
+    settings.AI_QUOTAS = {"generations_per_month": 1}
+    note = _note(user)
+    first = auth_client.post(
+        f"/api/notes/{note.pk}/generate/", {"outputs": ["summary"]}, format="json"
+    )
+    assert first.status_code == 202
+    response = auth_client.post(
+        f"/api/notes/{note.pk}/generate/", {"outputs": ["summary"]}, format="json"
+    )
+    assert response.status_code == 429
+    assert response.json()["error"]["details"] == {
+        "quota": "generations_per_month",
+        "limit": 1,
+        "used": 1,
+    }
+    assert "month" in response.json()["error"]["message"].lower()
+
+
+def test_usage_earlier_in_the_month_counts(auth_client, user, settings):
+    settings.AI_QUOTAS = {"generations_per_month": 1}
+    note = _note(user)
+    auth_client.post(f"/api/notes/{note.pk}/generate/", {"outputs": ["summary"]}, format="json")
+    GenerationJob.objects.filter(owner=user).update(created_at=_month_start())
+    response = auth_client.post(
+        f"/api/notes/{note.pk}/generate/", {"outputs": ["summary"]}, format="json"
+    )
+    assert response.status_code == 429
+
+
+def test_last_months_usage_does_not_count(auth_client, user, settings):
+    settings.AI_QUOTAS = {"generations_per_month": 1}
+    note = _note(user)
+    auth_client.post(f"/api/notes/{note.pk}/generate/", {"outputs": ["summary"]}, format="json")
+    GenerationJob.objects.filter(owner=user).update(
+        created_at=_month_start() - timedelta(minutes=1)
+    )
+    response = auth_client.post(
+        f"/api/notes/{note.pk}/generate/", {"outputs": ["summary"]}, format="json"
+    )
+    assert response.status_code == 202
+
+
+def test_podcasts_have_their_own_monthly_cap(auth_client, user, settings):
+    settings.AI_QUOTAS = {"generations_per_month": 10, "podcasts_per_month": 1}
+    note = _note(user)
+    first = auth_client.post(
+        f"/api/notes/{note.pk}/generate/", {"outputs": ["podcast"]}, format="json"
+    )
+    assert first.status_code == 202
+    other = _note(user, "b.pdf")
+    response = auth_client.post(
+        f"/api/notes/{other.pk}/generate/", {"outputs": ["podcast"]}, format="json"
+    )
+    assert response.status_code == 429
+    assert response.json()["error"]["details"]["quota"] == "podcasts_per_month"
+    # cheaper outputs are still within the general quota
+    ok = auth_client.post(
+        f"/api/notes/{other.pk}/generate/", {"outputs": ["summary"]}, format="json"
+    )
+    assert ok.status_code == 202
+
+
+def test_plan_creation_respects_monthly_quota(auth_client, user, settings):
+    settings.AI_QUOTAS = {"generations_per_month": 1}
+    note = _note(user)
+    auth_client.post(f"/api/notes/{note.pk}/generate/", {"outputs": ["summary"]}, format="json")
+    response = auth_client.post(
+        "/api/notes/study-plans/", {"note_ids": [note.pk]}, format="json"
+    )
+    assert response.status_code == 429
+    from notes.models import StudyPlan
+
+    assert not StudyPlan.objects.filter(owner=user).exists()
+
+
 def test_default_quotas_are_configured(settings):
-    for key in ("uploads_per_day", "generations_per_day", "podcasts_per_day"):
+    for key in (
+        "uploads_per_day",
+        "generations_per_day",
+        "podcasts_per_day",
+        "generations_per_month",
+        "podcasts_per_month",
+    ):
         assert isinstance(settings.AI_QUOTAS[key], int)

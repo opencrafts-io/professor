@@ -136,6 +136,10 @@ AI_QUOTAS = {
     "uploads_per_day": int(os.getenv("AI_QUOTA_UPLOADS_PER_DAY", "20")),
     "generations_per_day": int(os.getenv("AI_QUOTA_GENERATIONS_PER_DAY", "10")),
     "podcasts_per_day": int(os.getenv("AI_QUOTA_PODCASTS_PER_DAY", "3")),
+    # Monthly caps bound what one user can cost in a month: the premium price
+    # guarantee assumes no user exceeds these even at worst-case input sizes.
+    "generations_per_month": int(os.getenv("AI_QUOTA_GENERATIONS_PER_MONTH", "40")),
+    "podcasts_per_month": int(os.getenv("AI_QUOTA_PODCASTS_PER_MONTH", "8")),
 }
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
