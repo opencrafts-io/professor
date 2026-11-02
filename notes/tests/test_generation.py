@@ -207,6 +207,24 @@ def test_converted_markdown_is_cached_across_jobs(docx_note, docx_job, user):
     assert client.document_text_seen == ["# Lecture"]
 
 
+def test_oversized_pdf_fails_instead_of_native_fallback(job, settings):
+    # The input cap bounds the worst-case cost per call; letting an over-cap
+    # PDF through the scanned-document fallback would send the whole file to
+    # the model and void that bound.
+    settings.NOTES_MAX_MARKDOWN_CHARS = 10
+
+    class HugeConverter:
+        def to_markdown(self, file_bytes, filename):
+            return "x" * 11
+
+    client = FakeClient()
+    run_generation_job(job.pk, client=client, markdown_converter=HugeConverter())
+    job.refresh_from_db()
+    assert job.status == GenerationJob.FAILED
+    assert job.failure_code == GenerationJob.FAILURE_CONVERSION
+    assert client.calls == []
+
+
 def test_pdf_fallback_does_not_cache_markdown(job):
     from notes.convert.base import ConversionError
 
@@ -488,6 +506,14 @@ def test_study_plan_combined_markdown_cap_applies(user, settings):
     job.refresh_from_db()
     assert job.status == GenerationJob.FAILED
     assert job.failure_code == GenerationJob.FAILURE_CONVERSION
+
+
+def test_default_markdown_cap_bounds_worst_case_cost():
+    # The premium pricing guarantee assumes at most ~75k input tokens per call;
+    # 300k characters keeps a three-document study plan within the cap.
+    from django.conf import settings as live_settings
+
+    assert live_settings.NOTES_MAX_MARKDOWN_CHARS == 300_000
 
 
 def test_regenerating_replaces_topics_in_place(user):

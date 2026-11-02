@@ -1,6 +1,7 @@
 import uuid
 from pathlib import Path
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -86,6 +87,17 @@ class GenerationJob(models.Model):
         self.failure_message = message
         self.finished_at = timezone.now()
         self.save(update_fields=["status", "failure_code", "failure_message", "finished_at"])
+
+    def reap_if_stuck(self):
+        # A worker killed mid-job (OOM, redeploy) leaves the row processing
+        # forever; polls run this check so no scheduler process is needed.
+        if self.status != self.PROCESSING or self.started_at is None:
+            return
+        age = (timezone.now() - self.started_at).total_seconds()
+        if age > settings.NOTES_JOB_STUCK_SECONDS:
+            self.mark_failed(
+                self.FAILURE_INTERNAL, "The job timed out. Request the generation again."
+            )
 
     def __str__(self):
         return f"job {self.pk} [{self.status}] outputs={self.requested_outputs}"

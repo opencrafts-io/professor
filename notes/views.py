@@ -1,7 +1,9 @@
+from datetime import date
 from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -20,6 +22,7 @@ from .serializers import (
     SummarySerializer,
 )
 from .services.entitlements import HasAIEntitlement
+from .services.quotas import enforce_quota
 from .tasks import run_generation
 
 # generation grows to study plans (wk6)
@@ -35,6 +38,20 @@ def get_owned_note(request, pk):
     if note is None:
         raise APIError("Note not found.", code=ErrorCode.NOT_FOUND, status_code=404)
     return note
+
+
+def dispatch_job(job):
+    # A job that never reaches the broker must not survive as pending: it
+    # would 409-block every retry until someone deletes it by hand.
+    try:
+        run_generation.delay(job.pk)
+    except Exception as exc:
+        job.mark_failed(GenerationJob.FAILURE_INTERNAL, f"queueing failed: {exc}")
+        raise APIError(
+            "The generation job could not be queued. Please try again shortly.",
+            code=ErrorCode.INTERNAL_ERROR,
+            status_code=500,
+        )
 
 
 class NoteListCreateView(NotesAPIView):
@@ -56,6 +73,7 @@ class NoteListCreateView(NotesAPIView):
     }
 
     def post(self, request):
+        enforce_quota(request.user, "uploads")
         upload = request.FILES.get("file")
         if upload is None:
             raise APIError(
@@ -84,13 +102,16 @@ class NoteListCreateView(NotesAPIView):
         course = None
         course_id = request.data.get("course_id")
         if course_id:
-            course = StudentCourse.objects.filter(pk=course_id).first()
+            try:
+                course = StudentCourse.objects.filter(pk=course_id).first()
+            except (ValueError, ValidationError):
+                course = None
             if course is None:
                 raise APIError(
                     "Unknown course_id.",
                     code=ErrorCode.VALIDATION_ERROR,
                     status_code=400,
-                    details={"course_id": course_id},
+                    details={"course_id": str(course_id)},
                 )
 
         note = Note.objects.create(
@@ -161,20 +182,24 @@ class NoteGenerateView(NotesAPIView):
             question_format = ""
         in_flight = note.jobs.filter(
             status__in=[GenerationJob.PENDING, GenerationJob.PROCESSING]
-        ).exists()
-        if in_flight:
+        ).first()
+        if in_flight is not None:
             raise APIError(
                 "A generation job for this note is already running.",
                 code=ErrorCode.JOB_ALREADY_RUNNING,
                 status_code=409,
+                details={"job_id": in_flight.pk},
             )
+        enforce_quota(request.user, "generations")
+        if OutputType.PODCAST.value in outputs:
+            enforce_quota(request.user, "podcasts")
         job = GenerationJob.objects.create(
             note=note,
             owner=request.user,
             requested_outputs=outputs,
             question_format=question_format,
         )
-        run_generation.delay(job.pk)
+        dispatch_job(job)
         return Response({"job_id": job.pk}, status=status.HTTP_202_ACCEPTED)
 
 
@@ -215,17 +240,19 @@ def get_owned_plan(request, pk):
 def _dispatch_plan_job(request, plan):
     in_flight = plan.jobs.filter(
         status__in=[GenerationJob.PENDING, GenerationJob.PROCESSING]
-    ).exists()
-    if in_flight:
+    ).first()
+    if in_flight is not None:
         raise APIError(
             "A generation job for this study plan is already running.",
             code=ErrorCode.JOB_ALREADY_RUNNING,
             status_code=409,
+            details={"job_id": in_flight.pk},
         )
+    enforce_quota(request.user, "generations")
     job = GenerationJob.objects.create(
         owner=request.user, study_plan=plan, requested_outputs=[OutputType.STUDY_PLAN.value]
     )
-    run_generation.delay(job.pk)
+    dispatch_job(job)
     return job
 
 
@@ -269,6 +296,9 @@ class StudyPlanCreateView(NotesAPIView):
                     details={"course_id": str(course_id)},
                 )
 
+        # checked again in _dispatch_plan_job; here it keeps a rejected
+        # request from leaving an empty plan row behind
+        enforce_quota(request.user, "generations")
         plan = StudyPlan.objects.create(owner=request.user, course=course)
         plan.notes.set(notes)
         job = _dispatch_plan_job(request, plan)
@@ -294,6 +324,45 @@ class StudyPlanRegenerateView(NotesAPIView):
         return Response({"job_id": job.pk}, status=status.HTTP_202_ACCEPTED)
 
 
+class StudyPlanSuggestedSessionsView(NotesAPIView):
+    permission_classes = [HasAIEntitlement]
+
+    def get(self, request, pk):
+        plan = get_owned_plan(request, pk)
+        if not plan.topics:
+            raise APIError(
+                "This study plan has no topics yet — generate it first.",
+                code=ErrorCode.NOT_FOUND,
+                status_code=404,
+            )
+        deadline = None
+        deadline_raw = request.query_params.get("deadline")
+        if deadline_raw:
+            try:
+                deadline = date.fromisoformat(deadline_raw)
+            except ValueError:
+                raise APIError(
+                    "'deadline' must be a YYYY-MM-DD date.",
+                    code=ErrorCode.VALIDATION_ERROR,
+                    status_code=400,
+                )
+            if deadline < timezone.now().date():
+                raise APIError(
+                    "'deadline' is in the past.",
+                    code=ErrorCode.VALIDATION_ERROR,
+                    status_code=400,
+                    details={"deadline": deadline_raw},
+                )
+        from .services.sessions import suggested_sessions
+
+        return Response(
+            {
+                "study_plan_id": plan.pk,
+                "sessions": suggested_sessions(plan, deadline=deadline),
+            }
+        )
+
+
 class JobDetailView(NotesAPIView):
     permission_classes = [HasAIEntitlement]
 
@@ -301,6 +370,7 @@ class JobDetailView(NotesAPIView):
         job = GenerationJob.objects.filter(pk=job_id, owner=request.user).first()
         if job is None:
             raise APIError("Job not found.", code=ErrorCode.NOT_FOUND, status_code=404)
+        job.reap_if_stuck()
         return Response(GenerationJobSerializer(job).data)
 
 

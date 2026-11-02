@@ -18,6 +18,7 @@ class ErrorCode:
     ENTITLEMENT_UNAVAILABLE = "entitlement_unavailable"
     NOT_FOUND = "not_found"
     JOB_ALREADY_RUNNING = "job_already_running"
+    QUOTA_EXCEEDED = "quota_exceeded"
     INTERNAL_ERROR = "internal_error"
 
 

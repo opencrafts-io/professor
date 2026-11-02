@@ -42,6 +42,14 @@ class LLMClient(Protocol):
     def generate(self, document: DocumentSource, output_types, context) -> GenerationResult: ...
 
 
+class LLMProviderError(Exception):
+    """The provider call itself failed (network, 5xx, rate limit).
+
+    Raised by clients instead of SDK-specific exceptions so the task layer
+    can retry these with backoff without knowing which provider is behind.
+    """
+
+
 QUESTION_FORMATS = ("flashcard", "mcq", "open_ended")
 
 _QUESTION_SHAPES = {

@@ -13,6 +13,11 @@ urlpatterns = [
         views.StudyPlanRegenerateView.as_view(),
         name="study-plan-regenerate",
     ),
+    path(
+        "study-plans/<int:pk>/suggested-sessions/",
+        views.StudyPlanSuggestedSessionsView.as_view(),
+        name="study-plan-suggested-sessions",
+    ),
     path("<int:pk>/", views.NoteDetailView.as_view(), name="note-detail"),
     path("<int:pk>/generate/", views.NoteGenerateView.as_view(), name="note-generate"),
     path("<int:pk>/summary/", views.NoteSummaryView.as_view(), name="note-summary"),
