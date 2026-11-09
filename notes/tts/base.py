@@ -32,14 +32,14 @@ def pcm_to_wav(pcm_bytes):
     return buffer.getvalue()
 
 
-def pcm_to_mp3(pcm_bytes, bitrate_kbps=MP3_BITRATE_KBPS):
+def pcm_to_mp3(pcm_bytes, bitrate_kbps=MP3_BITRATE_KBPS, sample_rate=SAMPLE_RATE):
     encoder = lameenc.Encoder()
     encoder.set_bit_rate(bitrate_kbps)
-    encoder.set_in_sample_rate(SAMPLE_RATE)
+    encoder.set_in_sample_rate(sample_rate)
     encoder.set_channels(1)
     encoder.set_quality(2)  # 0 best/slowest .. 9 worst; 2 = high
     return bytes(encoder.encode(pcm_bytes)) + bytes(encoder.flush())
 
 
-def pcm_duration_seconds(pcm_bytes):
-    return len(pcm_bytes) / (SAMPLE_RATE * 2)
+def pcm_duration_seconds(pcm_bytes, sample_rate=SAMPLE_RATE):
+    return len(pcm_bytes) / (sample_rate * 2)
