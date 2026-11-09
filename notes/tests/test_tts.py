@@ -52,7 +52,6 @@ def test_gemini_tts_builds_multispeaker_request_and_wraps_wav(monkeypatch):
     client = tts_gemini.GeminiTTSClient(api_key="key")
     result = client.synthesize(SCRIPT)
 
-    assert SCRIPT in calls["contents"]
     speech_config = calls["config"].speech_config
     speakers = {
         c.speaker for c in speech_config.multi_speaker_voice_config.speaker_voice_configs
@@ -62,6 +61,98 @@ def test_gemini_tts_builds_multispeaker_request_and_wraps_wav(monkeypatch):
     assert result.duration_seconds == 1.0
     assert result.audio_tokens == 800
     assert "tts" in client.provider
+
+
+def test_gemini_tts_defaults_to_a_live_model_and_verbatim_text(monkeypatch):
+    # gemini-3.1-flash-tts-preview shuts down 2026-11-17; its 3.8 replacements
+    # read `contents` as a verbatim transcript, so no prompt preamble.
+    from notes.tts import gemini as tts_gemini
+
+    calls = {}
+    pcm = b"\x00\x01" * 24000
+
+    class StubModels:
+        def generate_content(self, **kwargs):
+            calls.update(kwargs)
+            part = SimpleNamespace(inline_data=SimpleNamespace(data=pcm))
+            return SimpleNamespace(
+                candidates=[SimpleNamespace(content=SimpleNamespace(parts=[part]))],
+                usage_metadata=SimpleNamespace(prompt_token_count=50, candidates_token_count=800),
+            )
+
+    monkeypatch.setattr(
+        tts_gemini.genai, "Client", lambda api_key: SimpleNamespace(models=StubModels())
+    )
+
+    tts_gemini.GeminiTTSClient(api_key="key").synthesize(SCRIPT)
+    assert calls["model"] == "gemini-3.8-flash-tts"
+    # one part per speaker turn, tagged via speech_metadata, label stripped
+    parts = calls["contents"]
+    assert [(p.speech_metadata.speaker, p.text) for p in parts] == [
+        ("Alex", "Welcome."),
+        ("Jordan", "Today, Fourier series."),
+    ]
+
+
+def test_script_parsing_glues_continuation_lines_to_their_turn(monkeypatch):
+    from notes.tts import gemini as tts_gemini
+
+    calls = {}
+    pcm = b"\x00\x01" * 24000
+
+    class StubModels:
+        def generate_content(self, **kwargs):
+            calls.update(kwargs)
+            part = SimpleNamespace(inline_data=SimpleNamespace(data=pcm))
+            return SimpleNamespace(
+                candidates=[SimpleNamespace(content=SimpleNamespace(parts=[part]))],
+                usage_metadata=SimpleNamespace(prompt_token_count=1, candidates_token_count=1),
+            )
+
+    monkeypatch.setattr(
+        tts_gemini.genai, "Client", lambda api_key: SimpleNamespace(models=StubModels())
+    )
+
+    script = "Alex: One sentence\nthat wraps onto a second line.\nJordan: Reply."
+    tts_gemini.GeminiTTSClient(api_key="key").synthesize(script)
+    assert [(p.speech_metadata.speaker, p.text) for p in calls["contents"]] == [
+        ("Alex", "One sentence that wraps onto a second line."),
+        ("Jordan", "Reply."),
+    ]
+
+
+def test_gemini_tts_unwraps_riff_wav_responses(monkeypatch):
+    # The 3.8 TTS models return WAV with a RIFF header where the previews
+    # returned raw PCM; the header must not be encoded as audio.
+    import io
+    import wave
+
+    from notes.tts import gemini as tts_gemini
+
+    pcm = b"\x00\x01" * 24000  # exactly 1.0s of 24kHz 16-bit mono
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as f:
+        f.setnchannels(1)
+        f.setsampwidth(2)
+        f.setframerate(24000)
+        f.writeframes(pcm)
+    wav = buffer.getvalue()
+
+    class StubModels:
+        def generate_content(self, **kwargs):
+            part = SimpleNamespace(inline_data=SimpleNamespace(data=wav))
+            return SimpleNamespace(
+                candidates=[SimpleNamespace(content=SimpleNamespace(parts=[part]))],
+                usage_metadata=SimpleNamespace(prompt_token_count=50, candidates_token_count=800),
+            )
+
+    monkeypatch.setattr(
+        tts_gemini.genai, "Client", lambda api_key: SimpleNamespace(models=StubModels())
+    )
+
+    result = tts_gemini.GeminiTTSClient(api_key="key").synthesize(SCRIPT)
+    assert _is_mp3(result.audio_mp3)
+    assert result.duration_seconds == 1.0
 
 
 def test_get_tts_client_honours_settings_backend(settings):
